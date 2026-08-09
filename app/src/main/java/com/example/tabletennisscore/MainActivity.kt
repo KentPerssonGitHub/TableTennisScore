@@ -10,6 +10,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.animation.LinearInterpolator
+import android.view.MotionEvent
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -36,6 +37,8 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: GameViewModel by viewModels()
     private var rallyBallAnimator: ValueAnimator? = null
     private var rallyBallSpinDirection = 1f
+    private var serveDragStartRawX = 0f
+    private var serveDragStartRawY = 0f
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerTick = object : Runnable {
         override fun run() {
@@ -69,6 +72,45 @@ class MainActivity : AppCompatActivity() {
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndo.setOnClickListener { viewModel.undo() }
+        setupServeBallDrag()
+    }
+
+    private fun setupServeBallDrag() {
+        val dragListener = View.OnTouchListener { view, event ->
+            val state = viewModel.state.value ?: return@OnTouchListener false
+            if (!state.hasMatchStarted || state.matchWinner != null) return@OnTouchListener false
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    serveDragStartRawX = event.rawX
+                    serveDragStartRawY = event.rawY
+                    view.elevation = 24f
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    view.translationX = event.rawX - serveDragStartRawX
+                    view.translationY = event.rawY - serveDragStartRawY
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (event.action == MotionEvent.ACTION_UP) {
+                        val ballCenterX = view.left + view.width / 2f + view.translationX
+                        val dividerCenterX = binding.divider.x + binding.divider.width / 2f
+                        val crossedOver = if (view.id == R.id.ivServe1)
+                            ballCenterX > dividerCenterX
+                        else
+                            ballCenterX < dividerCenterX
+                        if (crossedOver) viewModel.swapServer()
+                        view.performClick()
+                    }
+                    view.animate().translationX(0f).translationY(0f).setDuration(150).start()
+                    view.elevation = 0f
+                    true
+                }
+                else -> false
+            }
+        }
+        binding.ivServe1.setOnTouchListener(dragListener)
+        binding.ivServe2.setOnTouchListener(dragListener)
     }
 
     private fun observeState() {

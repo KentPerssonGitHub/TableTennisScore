@@ -48,6 +48,13 @@ class GameViewModel : ViewModel() {
     private var elapsedPlayedMs: Long = 0L
     private var runningSinceMs: Long? = null
 
+    fun swapServer() {
+        if (current.matchWinner != null) return
+        pushHistory()
+        matchFirstServer = otherPlayer(matchFirstServer)
+        _state.value = current.copy(server = otherPlayer(current.server))
+    }
+
     fun addPoint(player: Int) {
         if (!current.isMatchRunning || current.matchWinner != null) return
         pushHistory()
