@@ -9,4 +9,6 @@
     <color name="primary">#1565C0</color>
     <color name="primary_variant">#0D47A1</color>
     <color name="surface">#16213E</color>
+    <color name="background_running">#1F2E22</color>
+    <color name="background_paused">#2E1F22</color>
 </resources>

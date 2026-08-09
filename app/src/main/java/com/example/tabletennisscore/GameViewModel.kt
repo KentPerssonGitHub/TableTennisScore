@@ -23,6 +23,8 @@ class GameViewModel : ViewModel() {
         val server: Int = 1,         // 1 or 2
         val player1Name: String = "Player 1",
         val player2Name: String = "Player 2",
+        val isMatchRunning: Boolean = false,
+        val hasMatchStarted: Boolean = false,
     )
 
     private val _state = MutableLiveData(GameState())
@@ -37,6 +39,7 @@ class GameViewModel : ViewModel() {
     private var setFirstServer: Int = 1
 
     fun addPoint(player: Int) {
+        if (!current.isMatchRunning) return
         pushHistory()
         val s = current
         var score1 = s.score1
@@ -79,6 +82,29 @@ class GameViewModel : ViewModel() {
         _state.value = GameState(
             player1Name = current.player1Name,
             player2Name = current.player2Name,
+        )
+    }
+
+    fun startOrResumeMatch() {
+        _state.value = current.copy(
+            isMatchRunning = true,
+            hasMatchStarted = true,
+        )
+    }
+
+    fun pauseMatch() {
+        _state.value = current.copy(isMatchRunning = false)
+    }
+
+    fun setupMatch(player1Name: String, player2Name: String, firstServer: Int) {
+        history.clear()
+        setFirstServer = if (firstServer == 2) 2 else 1
+        _state.value = GameState(
+            server = setFirstServer,
+            player1Name = player1Name.trim().ifEmpty { "Player 1" },
+            player2Name = player2Name.trim().ifEmpty { "Player 2" },
+            isMatchRunning = false,
+            hasMatchStarted = false,
         )
     }
 

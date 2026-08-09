@@ -2,6 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background"
@@ -55,9 +56,9 @@
         android:contentDescription="@string/cd_serve_indicator"
         android:visibility="invisible"
         app:layout_constraintTop_toTopOf="@id/tvScore1"
-        app:layout_constraintBottom_toBottomOf="@id/tvScore1"
-        app:layout_constraintEnd_toStartOf="@id/divider"
-        android:layout_marginEnd="12dp" />
+        app:layout_constraintStart_toStartOf="@id/tvScore1"
+        app:layout_constraintEnd_toEndOf="@id/tvScore1"
+        android:layout_marginTop="12dp" />
 
     <!-- ===== CENTER DIVIDER ===== -->
 
@@ -135,35 +136,79 @@
         android:contentDescription="@string/cd_serve_indicator"
         android:visibility="invisible"
         app:layout_constraintTop_toTopOf="@id/tvScore2"
-        app:layout_constraintBottom_toBottomOf="@id/tvScore2"
-        app:layout_constraintStart_toEndOf="@id/divider"
-        android:layout_marginStart="12dp" />
+        app:layout_constraintStart_toStartOf="@id/tvScore2"
+        app:layout_constraintEnd_toEndOf="@id/tvScore2"
+        android:layout_marginTop="12dp" />
 
-    <!-- ===== BOTTOM CONTROLS ===== -->
+    <!-- ===== CENTER CONTROLS ===== -->
 
-    <!-- Undo / Reset buttons -->
+    <!-- Keep controls in a vertical row so buttons align top-to-bottom. -->
+    <LinearLayout
+        android:id="@+id/centerControlsRow"
+        android:layout_width="160dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:clickable="true"
+        android:focusable="true"
+        app:layout_constraintTop_toTopOf="@id/tvScore1"
+        app:layout_constraintBottom_toBottomOf="@id/tvScore1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStartMatch"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/btn_start_match"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSetupMatch"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/btn_setup_match"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnReset"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_reset"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnUndo"
         style="@style/Widget.Material3.Button.TonalButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
         android:text="@string/btn_undo"
         android:textSize="14sp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="12dp" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/btnPauseMatch" />
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnReset"
-        style="@style/Widget.Material3.Button.TonalButton"
+        android:id="@+id/btnPauseMatch"
+        style="@style/Widget.Material3.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/btn_reset"
-        android:textSize="14sp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginBottom="16dp"
+        android:text="@string/btn_pause_match"
+        android:textSize="16sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="12dp" />
+        app:layout_constraintBottom_toBottomOf="parent" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
