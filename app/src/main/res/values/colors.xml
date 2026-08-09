@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#1A1A2E</color>
+    <color name="score_text">#FFFFFF</color>
+    <color name="player_name">#E0E0E0</color>
+    <color name="sets_text">#90CAF9</color>
+    <color name="divider">#37474F</color>
+    <color name="serve_ball">#FFD600</color>
+    <color name="primary">#1565C0</color>
+    <color name="primary_variant">#0D47A1</color>
+    <color name="surface">#16213E</color>
+</resources>

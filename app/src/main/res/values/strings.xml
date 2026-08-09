@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Table Tennis Score</string>
+    <string name="player1_default">Player 1</string>
+    <string name="player2_default">Player 2</string>
+    <string name="btn_undo">↩ Undo</string>
+    <string name="btn_reset">Reset</string>
+    <string name="dialog_edit_name">Edit name</string>
+    <string name="dialog_hint_name">Player name</string>
+    <string name="dialog_ok">OK</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="cd_edit_player1">Edit player 1 name</string>
+    <string name="cd_edit_player2">Edit player 2 name</string>
+    <string name="cd_serve_indicator">Serve indicator</string>
+    <string name="confirm_reset_title">Reset match?</string>
+    <string name="confirm_reset_message">This will reset all scores and sets.</string>
+</resources>
