@@ -156,7 +156,6 @@ class GameViewModel : ViewModel() {
     fun updatePausedMatchScores(setResults: List<Pair<Int, Int>>, currentScore1: Int, currentScore2: Int): Boolean {
         if (current.isMatchRunning || current.matchWinner != null || !current.hasMatchStarted) return false
         if (currentScore1 < 0 || currentScore2 < 0) return false
-        if (isSetWon(currentScore1, currentScore2)) return false
 
         var sets1 = 0
         var sets2 = 0
@@ -168,20 +167,40 @@ class GameViewModel : ViewModel() {
         if (isMatchWon(sets1, sets2, current.bestOfSets)) return false
 
         pushHistory()
-        val server = nextServer(
-            currentScore1,
-            currentScore2,
-            currentScore1 + currentScore2,
-            currentSetFirstServer(setResults.size),
-        )
-        _state.value = current.copy(
-            score1 = currentScore1,
-            score2 = currentScore2,
-            sets1 = sets1,
-            sets2 = sets2,
-            setResults = setResults,
-            server = server,
-        )
+
+        if (isSetWon(currentScore1, currentScore2)) {
+            // Current set score is a finished set — finalize it
+            val setWinner = if (currentScore1 > currentScore2) 1 else 2
+            val finalSets1 = sets1 + if (setWinner == 1) 1 else 0
+            val finalSets2 = sets2 + if (setWinner == 2) 1 else 0
+            val finalSetResults = setResults + listOf(currentScore1 to currentScore2)
+            val matchWinner = if (isMatchWon(finalSets1, finalSets2, current.bestOfSets)) setWinner else null
+            _state.value = current.copy(
+                score1 = 0,
+                score2 = 0,
+                sets1 = finalSets1,
+                sets2 = finalSets2,
+                setResults = finalSetResults,
+                server = currentSetFirstServer(finalSetResults.size),
+                isMatchRunning = false,
+                matchWinner = matchWinner,
+            )
+        } else {
+            val server = nextServer(
+                currentScore1,
+                currentScore2,
+                currentScore1 + currentScore2,
+                currentSetFirstServer(setResults.size),
+            )
+            _state.value = current.copy(
+                score1 = currentScore1,
+                score2 = currentScore2,
+                sets1 = sets1,
+                sets2 = sets2,
+                setResults = setResults,
+                server = server,
+            )
+        }
         return true
     }
 
