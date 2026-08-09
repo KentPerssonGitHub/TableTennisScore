@@ -26,6 +26,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import com.example.tabletennisscore.databinding.ActivityMainBinding
+import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
@@ -39,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private var rallyBallSpinDirection = 1f
     private var serveDragStartRawX = 0f
     private var serveDragStartRawY = 0f
+    private var lastShownDecidingSwapNoticeVersion = 0
+    private var decidingSwapSnackbar: Snackbar? = null
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerTick = object : Runnable {
         override fun run() {
@@ -135,6 +138,24 @@ class MainActivity : AppCompatActivity() {
             updateMatchTimerText()
             updateMatchSummaryPanel(state)
 
+            if (state.decidingSetSwapNoticeVersion > lastShownDecidingSwapNoticeVersion) {
+                lastShownDecidingSwapNoticeVersion = state.decidingSetSwapNoticeVersion
+                decidingSwapSnackbar?.dismiss()
+                decidingSwapSnackbar = Snackbar.make(
+                    binding.rootLayout,
+                    R.string.notice_swap_sides_now,
+                    Snackbar.LENGTH_INDEFINITE,
+                ).setAction(R.string.notice_done) {
+                    viewModel.confirmDecidingSetSideSwapDone()
+                }
+                decidingSwapSnackbar?.show()
+            }
+
+            if (!state.awaitingDecidingSetSwapConfirmation) {
+                decidingSwapSnackbar?.dismiss()
+                decidingSwapSnackbar = null
+            }
+
             // Serve indicator follows the player, not the side
             val leftServing = (p1OnLeft && state.server == 1) || (!p1OnLeft && state.server == 2)
             binding.ivServe1.visibility = if (leftServing) View.VISIBLE else View.INVISIBLE
@@ -152,6 +173,7 @@ class MainActivity : AppCompatActivity() {
             )
 
             val isMatchFinished = state.matchWinner != null
+            val isAwaitingSwapConfirm = state.awaitingDecidingSetSwapConfirmation
 
             if (state.isMatchRunning) {
                 binding.btnPauseMatch.visibility = View.VISIBLE
@@ -164,11 +186,11 @@ class MainActivity : AppCompatActivity() {
                 startMatchTimerTickerIfNeeded()
             } else {
                 binding.btnPauseMatch.visibility = View.GONE
-                binding.btnStartMatch.visibility = if (isMatchFinished) View.GONE else View.VISIBLE
+                binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
-                binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished) View.VISIBLE else View.GONE
-                binding.btnSwapSides.visibility = if (state.hasMatchStarted && !isMatchFinished) View.VISIBLE else View.GONE
-                binding.btnUndo.visibility = if (state.hasMatchStarted) View.VISIBLE else View.GONE
+                binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+                binding.btnSwapSides.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+                binding.btnUndo.visibility = if (state.hasMatchStarted && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()
             }
@@ -177,6 +199,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        decidingSwapSnackbar?.dismiss()
+        decidingSwapSnackbar = null
         stopRallyBallAnimation()
         stopMatchTimerTicker()
         super.onDestroy()

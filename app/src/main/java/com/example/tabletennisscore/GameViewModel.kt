@@ -34,6 +34,10 @@ class GameViewModel : ViewModel() {
         val matchWinner: Int? = null, // 1 or 2 when match is finished
         val setResults: List<Pair<Int, Int>> = emptyList(), // score1 to score2 per completed set
         val sidesSwapped: Boolean = false, // true when players have physically swapped ends
+        val decidingSetFiveSwapDone: Boolean = false,
+        val decidingSetSwapNoticeVersion: Int = 0,
+        val awaitingDecidingSetSwapConfirmation: Boolean = false,
+        val resumeAfterDecidingSetSwapConfirmation: Boolean = false,
     )
 
     private val _state = MutableLiveData(GameState())
@@ -62,6 +66,19 @@ class GameViewModel : ViewModel() {
         _state.value = current.copy(sidesSwapped = !current.sidesSwapped)
     }
 
+    fun confirmDecidingSetSideSwapDone() {
+        if (!current.awaitingDecidingSetSwapConfirmation) return
+        val shouldResume = current.resumeAfterDecidingSetSwapConfirmation && current.matchWinner == null
+        if (shouldResume) {
+            runningSinceMs = SystemClock.elapsedRealtime()
+        }
+        _state.value = current.copy(
+            awaitingDecidingSetSwapConfirmation = false,
+            resumeAfterDecidingSetSwapConfirmation = false,
+            isMatchRunning = shouldResume,
+        )
+    }
+
     fun addPoint(player: Int) {
         if (!current.isMatchRunning || current.matchWinner != null) return
         pushHistory()
@@ -73,8 +90,25 @@ class GameViewModel : ViewModel() {
         var isMatchRunning = s.isMatchRunning
         var matchWinner = s.matchWinner
         var sidesSwapped = s.sidesSwapped
+        var decidingSetFiveSwapDone = s.decidingSetFiveSwapDone
+        var decidingSetSwapNoticeVersion = s.decidingSetSwapNoticeVersion
+        var awaitingDecidingSetSwapConfirmation = s.awaitingDecidingSetSwapConfirmation
+        var resumeAfterDecidingSetSwapConfirmation = s.resumeAfterDecidingSetSwapConfirmation
         val setResults = s.setResults.toMutableList()
         if (player == 1) score1++ else score2++
+
+        if (isDecidingSet(sets1, sets2, s.bestOfSets) &&
+            !decidingSetFiveSwapDone &&
+            (score1 >= 5 || score2 >= 5)
+        ) {
+            sidesSwapped = !sidesSwapped
+            decidingSetFiveSwapDone = true
+            decidingSetSwapNoticeVersion++
+            captureElapsedUntilNow()
+            isMatchRunning = false
+            awaitingDecidingSetSwapConfirmation = true
+            resumeAfterDecidingSetSwapConfirmation = true
+        }
 
         val totalPoints = score1 + score2
         var server = nextServer(score1, score2, totalPoints, currentSetFirstServer(s.setResults.size))
@@ -95,6 +129,9 @@ class GameViewModel : ViewModel() {
                 sidesSwapped = !sidesSwapped // players switch ends after each set
                 server = currentSetFirstServer(setResults.size)
             }
+            decidingSetFiveSwapDone = false
+            awaitingDecidingSetSwapConfirmation = false
+            resumeAfterDecidingSetSwapConfirmation = false
         }
 
         _state.value = s.copy(
@@ -107,6 +144,10 @@ class GameViewModel : ViewModel() {
             matchWinner = matchWinner,
             setResults = setResults,
             sidesSwapped = sidesSwapped,
+            decidingSetFiveSwapDone = decidingSetFiveSwapDone,
+            decidingSetSwapNoticeVersion = decidingSetSwapNoticeVersion,
+            awaitingDecidingSetSwapConfirmation = awaitingDecidingSetSwapConfirmation,
+            resumeAfterDecidingSetSwapConfirmation = resumeAfterDecidingSetSwapConfirmation,
         )
     }
 
@@ -130,6 +171,7 @@ class GameViewModel : ViewModel() {
 
     fun startOrResumeMatch() {
         if (current.matchWinner != null) return
+        if (current.awaitingDecidingSetSwapConfirmation) return
         if (!current.isMatchRunning) {
             runningSinceMs = SystemClock.elapsedRealtime()
         }
@@ -140,6 +182,7 @@ class GameViewModel : ViewModel() {
     }
 
     fun pauseMatch() {
+        if (current.awaitingDecidingSetSwapConfirmation) return
         if (current.isMatchRunning) {
             captureElapsedUntilNow()
         }
@@ -205,6 +248,9 @@ class GameViewModel : ViewModel() {
                 isMatchRunning = false,
                 matchWinner = matchWinner,
                 sidesSwapped = newSidesSwapped,
+                decidingSetFiveSwapDone = false,
+                awaitingDecidingSetSwapConfirmation = false,
+                resumeAfterDecidingSetSwapConfirmation = false,
             )
         } else {
             val server = nextServer(
@@ -213,6 +259,15 @@ class GameViewModel : ViewModel() {
                 currentScore1 + currentScore2,
                 currentSetFirstServer(setResults.size),
             )
+            val shouldSwapAtFive = isDecidingSet(sets1, sets2, current.bestOfSets) &&
+                !current.decidingSetFiveSwapDone &&
+                (currentScore1 >= 5 || currentScore2 >= 5)
+            val updatedSides = if (shouldSwapAtFive) !current.sidesSwapped else current.sidesSwapped
+            val updatedNoticeVersion = if (shouldSwapAtFive) {
+                current.decidingSetSwapNoticeVersion + 1
+            } else {
+                current.decidingSetSwapNoticeVersion
+            }
             _state.value = current.copy(
                 score1 = currentScore1,
                 score2 = currentScore2,
@@ -220,6 +275,11 @@ class GameViewModel : ViewModel() {
                 sets2 = sets2,
                 setResults = setResults,
                 server = server,
+                sidesSwapped = updatedSides,
+                decidingSetFiveSwapDone = isDecidingSet(sets1, sets2, current.bestOfSets) && (currentScore1 >= 5 || currentScore2 >= 5),
+                decidingSetSwapNoticeVersion = updatedNoticeVersion,
+                awaitingDecidingSetSwapConfirmation = shouldSwapAtFive,
+                resumeAfterDecidingSetSwapConfirmation = false,
             )
         }
         return true
@@ -276,6 +336,12 @@ class GameViewModel : ViewModel() {
     private fun isMatchWon(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
         val setsToWin = (bestOfSets / 2) + 1
         return sets1 >= setsToWin || sets2 >= setsToWin
+    }
+
+    private fun isDecidingSet(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
+        if (bestOfSets < 5) return false
+        val setsToWin = (bestOfSets / 2) + 1
+        return sets1 == setsToWin - 1 && sets2 == setsToWin - 1
     }
 
     private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {

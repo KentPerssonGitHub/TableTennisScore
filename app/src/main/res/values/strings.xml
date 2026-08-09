@@ -42,4 +42,6 @@
     <string name="match_summary_winner">%1$s wins</string>
     <string name="match_summary_time">Time: %1$s</string>
     <string name="error_invalid_manual_score">Enter valid scores for completed sets and the current in-progress set.</string>
+    <string name="notice_swap_sides_now">Deciding set: swap sides now.</string>
+    <string name="notice_done">Done</string>
 </resources>
