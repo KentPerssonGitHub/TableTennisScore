@@ -12,6 +12,7 @@
     <string name="dialog_edit_name">Edit name</string>
     <string name="dialog_setup_match">Setup match</string>
     <string name="dialog_hint_name">Player name</string>
+    <string name="dialog_best_of_sets">Best of sets</string>
     <string name="dialog_server_player1">Player 1 serves</string>
     <string name="dialog_server_player2">Player 2 serves</string>
     <string name="dialog_ok">OK</string>
@@ -25,4 +26,6 @@
     <string name="confirm_reset_title">Reset match?</string>
     <string name="confirm_reset_message">This will reset all scores and sets.</string>
     <string name="confirm_setup_match_message">Are you sure you want to stop current match?</string>
+    <string name="dialog_match_winner_title">Match won</string>
+    <string name="dialog_match_winner_message">%1$s wins the match.</string>
 </resources>

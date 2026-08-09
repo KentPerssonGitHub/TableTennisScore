@@ -7,6 +7,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.ScrollView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +18,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: GameViewModel by viewModels()
+    private var lastShownMatchWinner: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +67,7 @@ class MainActivity : AppCompatActivity() {
                 if (state.hasMatchStarted) R.string.btn_resume_match else R.string.btn_start_match,
             )
 
+            val isMatchFinished = state.matchWinner != null
 
             if (state.isMatchRunning) {
                 binding.btnPauseMatch.visibility = View.VISIBLE
@@ -74,12 +77,28 @@ class MainActivity : AppCompatActivity() {
                 binding.btnUndo.visibility = View.VISIBLE
             } else {
                 binding.btnPauseMatch.visibility = View.GONE
-                binding.btnStartMatch.visibility = View.VISIBLE
+                binding.btnStartMatch.visibility = if (isMatchFinished) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
                 binding.btnReset.visibility = View.VISIBLE
                 binding.btnUndo.visibility = if (state.hasMatchStarted) View.VISIBLE else View.GONE
             }
+
+            if (state.matchWinner == null) {
+                lastShownMatchWinner = null
+            } else if (state.matchWinner != lastShownMatchWinner) {
+                lastShownMatchWinner = state.matchWinner
+                showMatchWinnerDialog(state.matchWinner, state.player1Name, state.player2Name)
+            }
         }
+    }
+
+    private fun showMatchWinnerDialog(winner: Int, player1Name: String, player2Name: String) {
+        val winnerName = if (winner == 1) player1Name else player2Name
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_match_winner_title)
+            .setMessage(getString(R.string.dialog_match_winner_message, winnerName))
+            .setPositiveButton(R.string.dialog_ok, null)
+            .show()
     }
 
     private fun showEditNameDialog(player: Int) {
@@ -154,7 +173,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val serverGroup = RadioGroup(this).apply {
-            orientation = RadioGroup.VERTICAL
+            orientation = RadioGroup.HORIZONTAL
         }
         val player1ServeOption = RadioButton(this).apply {
             id = View.generateViewId()
@@ -168,19 +187,67 @@ class MainActivity : AppCompatActivity() {
         serverGroup.addView(player2ServeOption)
         serverGroup.check(if (state.server == 2) player2ServeOption.id else player1ServeOption.id)
 
+        val bestOfLabel = androidx.appcompat.widget.AppCompatTextView(this).apply {
+            text = getString(R.string.dialog_best_of_sets)
+            setPadding(0, 16, 0, 8)
+        }
+        val bestOfGroup = RadioGroup(this).apply {
+            orientation = RadioGroup.HORIZONTAL
+        }
+        val bestOf1 = RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "1"
+        }
+        val bestOf3 = RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "3"
+        }
+        val bestOf5 = RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "5"
+        }
+        val bestOf7 = RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "7"
+        }
+        bestOfGroup.addView(bestOf1)
+        bestOfGroup.addView(bestOf3)
+        bestOfGroup.addView(bestOf5)
+        bestOfGroup.addView(bestOf7)
+
+        when (state.bestOfSets) {
+            1 -> bestOfGroup.check(bestOf1.id)
+            3 -> bestOfGroup.check(bestOf3.id)
+            7 -> bestOfGroup.check(bestOf7.id)
+            else -> bestOfGroup.check(bestOf5.id)
+        }
+
         content.addView(player1Input)
         content.addView(player2Input)
         content.addView(serverGroup)
+        content.addView(bestOfLabel)
+        content.addView(bestOfGroup)
+
+        val scrollContent = ScrollView(this).apply {
+            addView(content)
+        }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_setup_match)
-            .setView(content)
+            .setView(scrollContent)
             .setPositiveButton(R.string.dialog_done) { _, _ ->
                 val firstServer = if (serverGroup.checkedRadioButtonId == player2ServeOption.id) 2 else 1
+                val selectedBestOf = when (bestOfGroup.checkedRadioButtonId) {
+                    bestOf1.id -> 1
+                    bestOf3.id -> 3
+                    bestOf7.id -> 7
+                    else -> 5
+                }
                 viewModel.setupMatch(
                     player1Name = player1Input.text.toString(),
                     player2Name = player2Input.text.toString(),
                     firstServer = firstServer,
+                    bestOfSets = selectedBestOf,
                 )
             }
             .setNegativeButton(R.string.dialog_cancel, null)

@@ -20,11 +20,13 @@ class GameViewModel : ViewModel() {
         val score2: Int = 0,
         val sets1: Int = 0,
         val sets2: Int = 0,
+        val bestOfSets: Int = 5,
         val server: Int = 1,         // 1 or 2
         val player1Name: String = "Player 1",
         val player2Name: String = "Player 2",
         val isMatchRunning: Boolean = false,
         val hasMatchStarted: Boolean = false,
+        val matchWinner: Int? = null, // 1 or 2 when match is finished
     )
 
     private val _state = MutableLiveData(GameState())
@@ -39,13 +41,15 @@ class GameViewModel : ViewModel() {
     private var setFirstServer: Int = 1
 
     fun addPoint(player: Int) {
-        if (!current.isMatchRunning) return
+        if (!current.isMatchRunning || current.matchWinner != null) return
         pushHistory()
         val s = current
         var score1 = s.score1
         var score2 = s.score2
         var sets1 = s.sets1
         var sets2 = s.sets2
+        var isMatchRunning = s.isMatchRunning
+        var matchWinner = s.matchWinner
         if (player == 1) score1++ else score2++
 
         val totalPoints = score1 + score2
@@ -54,11 +58,17 @@ class GameViewModel : ViewModel() {
         // Check if set is won
         if (isSetWon(score1, score2)) {
             if (player == 1) sets1++ else sets2++
-            // Next set: the player who did NOT serve first in this set serves first
-            setFirstServer = if (setFirstServer == 1) 2 else 1
             score1 = 0
             score2 = 0
-            server = setFirstServer
+
+            if (isMatchWon(sets1, sets2, s.bestOfSets)) {
+                matchWinner = player
+                isMatchRunning = false
+            } else {
+                // Next set: the player who did NOT serve first in this set serves first
+                setFirstServer = if (setFirstServer == 1) 2 else 1
+                server = setFirstServer
+            }
         }
 
         _state.value = s.copy(
@@ -67,6 +77,8 @@ class GameViewModel : ViewModel() {
             sets1 = sets1,
             sets2 = sets2,
             server = server,
+            isMatchRunning = isMatchRunning,
+            matchWinner = matchWinner,
         )
     }
 
@@ -80,12 +92,14 @@ class GameViewModel : ViewModel() {
         history.clear()
         setFirstServer = 1
         _state.value = GameState(
+            bestOfSets = current.bestOfSets,
             player1Name = current.player1Name,
             player2Name = current.player2Name,
         )
     }
 
     fun startOrResumeMatch() {
+        if (current.matchWinner != null) return
         _state.value = current.copy(
             isMatchRunning = true,
             hasMatchStarted = true,
@@ -96,10 +110,12 @@ class GameViewModel : ViewModel() {
         _state.value = current.copy(isMatchRunning = false)
     }
 
-    fun setupMatch(player1Name: String, player2Name: String, firstServer: Int) {
+    fun setupMatch(player1Name: String, player2Name: String, firstServer: Int, bestOfSets: Int) {
         history.clear()
         setFirstServer = if (firstServer == 2) 2 else 1
+        val validatedBestOf = if (bestOfSets in setOf(1, 3, 5, 7)) bestOfSets else 5
         _state.value = GameState(
+            bestOfSets = validatedBestOf,
             server = setFirstServer,
             player1Name = player1Name.trim().ifEmpty { "Player 1" },
             player2Name = player2Name.trim().ifEmpty { "Player 2" },
@@ -121,6 +137,11 @@ class GameViewModel : ViewModel() {
 
     private fun isSetWon(s1: Int, s2: Int): Boolean {
         return (s1 >= 11 || s2 >= 11) && Math.abs(s1 - s2) >= 2
+    }
+
+    private fun isMatchWon(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
+        val setsToWin = (bestOfSets / 2) + 1
+        return sets1 >= setsToWin || sets2 >= setsToWin
     }
 
     private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {
