@@ -1,13 +1,20 @@
 package com.example.tabletennisscore
 
+import android.text.InputFilter
+import android.text.InputType
 import android.os.Bundle
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.TableLayout
+import android.widget.TableRow
+import android.widget.TextView
+import android.widget.Toast
 import android.graphics.Typeface
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -40,17 +47,17 @@ class MainActivity : AppCompatActivity() {
         binding.tvPlayer2Name.setOnClickListener { showEditNameDialog(2) }
 
         binding.btnSetupMatch.setOnClickListener { confirmSetupMatch() }
+        binding.btnEditScore.setOnClickListener { showEditScoreDialog() }
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndo.setOnClickListener { viewModel.undo() }
-        binding.btnReset.setOnClickListener { confirmReset() }
     }
 
     private fun observeState() {
         viewModel.state.observe(this) { state ->
             binding.tvScore1.text = state.score1.toString()
             binding.tvScore2.text = state.score2.toString()
-            binding.tvSets.text = "${state.sets1} – ${state.sets2}"
+            binding.tvSets.text = getString(R.string.score_sets_format, state.sets1, state.sets2)
             binding.tvPlayer1Name.text = state.player1Name
             binding.tvPlayer2Name.text = state.player2Name
 
@@ -74,13 +81,13 @@ class MainActivity : AppCompatActivity() {
                 binding.btnPauseMatch.visibility = View.VISIBLE
                 binding.btnStartMatch.visibility = View.GONE
                 binding.btnSetupMatch.visibility = View.GONE
-                binding.btnReset.visibility = View.GONE
+                binding.btnEditScore.visibility = View.GONE
                 binding.btnUndo.visibility = View.VISIBLE
             } else {
                 binding.btnPauseMatch.visibility = View.GONE
                 binding.btnStartMatch.visibility = if (isMatchFinished) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
-                binding.btnReset.visibility = View.VISIBLE
+                binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished) View.VISIBLE else View.GONE
                 binding.btnUndo.visibility = if (state.hasMatchStarted) View.VISIBLE else View.GONE
             }
 
@@ -88,16 +95,86 @@ class MainActivity : AppCompatActivity() {
                 lastShownMatchWinner = null
             } else if (state.matchWinner != lastShownMatchWinner) {
                 lastShownMatchWinner = state.matchWinner
-                showMatchWinnerDialog(state.matchWinner, state.player1Name, state.player2Name)
+                showMatchWinnerDialog(state.matchWinner, state.player1Name, state.player2Name, state.setResults)
             }
         }
     }
 
-    private fun showMatchWinnerDialog(winner: Int, player1Name: String, player2Name: String) {
+    private fun showMatchWinnerDialog(winner: Int, player1Name: String, player2Name: String, setResults: List<Pair<Int, Int>>) {
         val winnerName = if (winner == 1) player1Name else player2Name
+        val state = viewModel.state.value ?: return
+        val density = resources.displayMetrics.density
+        fun Int.dp() = (this * density).toInt()
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24.dp(), 20.dp(), 24.dp(), 8.dp())
+        }
+
+        // Winner announcement
+        container.addView(TextView(this).apply {
+            text = getString(R.string.dialog_match_winner_message, winnerName)
+            textSize = 16f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 20.dp())
+        })
+
+        // Score table: columns = [name | sets | set1 | set2 | ...]
+        val table = TableLayout(this).apply {
+            isStretchAllColumns = false
+        }
+
+        val scoreColWidth = 36.dp()
+
+        fun makeNameCell(name: String) = TextView(this).apply {
+            text = name
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setPadding(0, 6.dp(), 20.dp(), 6.dp())
+        }
+
+        fun makeScoreCell(score: String, bold: Boolean) = TextView(this).apply {
+            text = score
+            textSize = 14f
+            gravity = Gravity.CENTER
+            if (bold) setTypeface(null, Typeface.BOLD)
+            layoutParams = TableRow.LayoutParams(scoreColWidth, TableRow.LayoutParams.WRAP_CONTENT)
+            setPadding(4.dp(), 6.dp(), 4.dp(), 6.dp())
+        }
+
+        val row1 = TableRow(this)
+        val row2 = TableRow(this)
+
+        row1.addView(makeNameCell(player1Name))
+        row2.addView(makeNameCell(player2Name))
+
+        // Sets won column – larger font to stand out
+        fun makeSetsWonCell(score: String) = TextView(this).apply {
+            text = score
+            textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            layoutParams = TableRow.LayoutParams(scoreColWidth + 16.dp(), TableRow.LayoutParams.WRAP_CONTENT)
+            setPadding(4.dp(), 4.dp(), 20.dp(), 4.dp())
+        }
+        row1.addView(makeSetsWonCell(state.sets1.toString()))
+        row2.addView(makeSetsWonCell(state.sets2.toString()))
+
+        // Per-set scores
+        setResults.forEach { (s1, s2) ->
+            row1.addView(makeScoreCell(s1.toString(), s1 > s2))
+            row2.addView(makeScoreCell(s2.toString(), s2 > s1))
+        }
+
+        table.addView(row1)
+        table.addView(row2)
+        container.addView(table)
+
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_match_winner_title)
-            .setMessage(getString(R.string.dialog_match_winner_message, winnerName))
+            .setView(container)
             .setPositiveButton(R.string.dialog_ok, null)
             .show()
     }
@@ -110,6 +187,7 @@ class MainActivity : AppCompatActivity() {
             setText(currentName)
             selectAll()
             hint = getString(R.string.dialog_hint_name)
+            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
         }
 
         AlertDialog.Builder(this)
@@ -117,6 +195,54 @@ class MainActivity : AppCompatActivity() {
             .setView(editText)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
                 viewModel.setPlayerName(player, editText.text.toString())
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun showEditScoreDialog() {
+        val state = viewModel.state.value ?: return
+        if (state.isMatchRunning || state.matchWinner != null || !state.hasMatchStarted) return
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val horizontalPadding = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                20f,
+                resources.displayMetrics,
+            ).toInt()
+            val topPadding = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                8f,
+                resources.displayMetrics,
+            ).toInt()
+            setPadding(horizontalPadding, topPadding, horizontalPadding, 0)
+        }
+
+        fun buildScoreInput(playerName: String, score: Int): EditText {
+            return EditText(this).apply {
+                hint = playerName
+                setText(score.toString())
+                setSelection(text.length)
+                inputType = InputType.TYPE_CLASS_NUMBER
+            }
+        }
+
+        val player1Input = buildScoreInput(getString(R.string.dialog_score_player1, state.player1Name), state.score1)
+        val player2Input = buildScoreInput(getString(R.string.dialog_score_player2, state.player2Name), state.score2)
+
+        content.addView(player1Input)
+        content.addView(player2Input)
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_edit_score_title)
+            .setView(content)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val score1 = player1Input.text.toString().toIntOrNull() ?: 0
+                val score2 = player2Input.text.toString().toIntOrNull() ?: 0
+                if (!viewModel.updatePausedScore(score1, score2)) {
+                    Toast.makeText(this, R.string.error_invalid_manual_score, Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
@@ -166,11 +292,13 @@ class MainActivity : AppCompatActivity() {
             hint = getString(R.string.player1_default)
             setText(state.player1Name)
             setSelection(text.length)
+            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
         }
         val player2Input = EditText(this).apply {
             hint = getString(R.string.player2_default)
             setText(state.player2Name)
             setSelection(text.length)
+            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
         }
 
         val player1Row = LinearLayout(this).apply {
@@ -245,9 +373,15 @@ class MainActivity : AppCompatActivity() {
         serveHeaderRow.addView(serveLabelSpacer)
         serveHeaderRow.addView(serveLabel)
 
+        val bestOfRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 16, 0, 0)
+        }
         val bestOfLabel = androidx.appcompat.widget.AppCompatTextView(this).apply {
             text = getString(R.string.dialog_best_of_sets)
-            setPadding(0, 16, 0, 8)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(0, 0, 12, 0)
         }
         val bestOfGroup = RadioGroup(this).apply {
             orientation = RadioGroup.HORIZONTAL
@@ -280,11 +414,13 @@ class MainActivity : AppCompatActivity() {
             else -> bestOfGroup.check(bestOf5.id)
         }
 
+        bestOfRow.addView(bestOfLabel)
+        bestOfRow.addView(bestOfGroup)
+
         content.addView(serveHeaderRow)
         content.addView(player1Row)
         content.addView(player2Row)
-        content.addView(bestOfLabel)
-        content.addView(bestOfGroup)
+        content.addView(bestOfRow)
 
         val scrollContent = ScrollView(this).apply {
             addView(content)

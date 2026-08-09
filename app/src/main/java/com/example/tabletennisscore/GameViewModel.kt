@@ -15,6 +15,10 @@ import androidx.lifecycle.ViewModel
  */
 class GameViewModel : ViewModel() {
 
+    companion object {
+        const val MAX_PLAYER_NAME_LENGTH = 12
+    }
+
     data class GameState(
         val score1: Int = 0,
         val score2: Int = 0,
@@ -27,6 +31,7 @@ class GameViewModel : ViewModel() {
         val isMatchRunning: Boolean = false,
         val hasMatchStarted: Boolean = false,
         val matchWinner: Int? = null, // 1 or 2 when match is finished
+        val setResults: List<Pair<Int, Int>> = emptyList(), // score1 to score2 per completed set
     )
 
     private val _state = MutableLiveData(GameState())
@@ -50,6 +55,7 @@ class GameViewModel : ViewModel() {
         var sets2 = s.sets2
         var isMatchRunning = s.isMatchRunning
         var matchWinner = s.matchWinner
+        val setResults = s.setResults.toMutableList()
         if (player == 1) score1++ else score2++
 
         val totalPoints = score1 + score2
@@ -57,6 +63,7 @@ class GameViewModel : ViewModel() {
 
         // Check if set is won
         if (isSetWon(score1, score2)) {
+            setResults.add(Pair(score1, score2))
             if (player == 1) sets1++ else sets2++
             score1 = 0
             score2 = 0
@@ -79,6 +86,7 @@ class GameViewModel : ViewModel() {
             server = server,
             isMatchRunning = isMatchRunning,
             matchWinner = matchWinner,
+            setResults = setResults,
         )
     }
 
@@ -110,6 +118,22 @@ class GameViewModel : ViewModel() {
         _state.value = current.copy(isMatchRunning = false)
     }
 
+    fun updatePausedScore(score1: Int, score2: Int): Boolean {
+        if (current.isMatchRunning || current.matchWinner != null || !current.hasMatchStarted) return false
+        if (score1 < 0 || score2 < 0) return false
+        if (isSetWon(score1, score2)) return false
+
+        pushHistory()
+        val totalPoints = score1 + score2
+        val server = nextServer(score1, score2, totalPoints, setFirstServer)
+        _state.value = current.copy(
+            score1 = score1,
+            score2 = score2,
+            server = server,
+        )
+        return true
+    }
+
     fun setupMatch(player1Name: String, player2Name: String, firstServer: Int, bestOfSets: Int) {
         history.clear()
         setFirstServer = if (firstServer == 2) 2 else 1
@@ -117,17 +141,24 @@ class GameViewModel : ViewModel() {
         _state.value = GameState(
             bestOfSets = validatedBestOf,
             server = setFirstServer,
-            player1Name = player1Name.trim().ifEmpty { "Player 1" },
-            player2Name = player2Name.trim().ifEmpty { "Player 2" },
+            player1Name = sanitizePlayerName(player1Name, "Player 1"),
+            player2Name = sanitizePlayerName(player2Name, "Player 2"),
             isMatchRunning = false,
             hasMatchStarted = false,
         )
     }
 
     fun setPlayerName(player: Int, name: String) {
-        val trimmed = name.trim().ifEmpty { if (player == 1) "Player 1" else "Player 2" }
+        val trimmed = sanitizePlayerName(name, if (player == 1) "Player 1" else "Player 2")
         _state.value = if (player == 1) current.copy(player1Name = trimmed)
                        else current.copy(player2Name = trimmed)
+    }
+
+    private fun sanitizePlayerName(name: String, fallback: String): String {
+        return name
+            .trim()
+            .take(MAX_PLAYER_NAME_LENGTH)
+            .ifEmpty { fallback }
     }
 
     private fun pushHistory() {

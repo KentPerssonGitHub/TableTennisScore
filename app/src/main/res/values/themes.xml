@@ -6,5 +6,12 @@
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:fontFamily">@font/goldman</item>
+        <item name="fontFamily">@font/goldman</item>
+        <item name="android:textViewStyle">@style/Widget.TableTennisScore.TextView</item>
+        <item name="android:buttonStyle">@style/Widget.TableTennisScore.Button</item>
+        <item name="materialButtonStyle">@style/Widget.TableTennisScore.MaterialButton</item>
+        <item name="android:editTextStyle">@style/Widget.TableTennisScore.EditText</item>
+        <item name="android:radioButtonStyle">@style/Widget.TableTennisScore.RadioButton</item>
     </style>
 </resources>

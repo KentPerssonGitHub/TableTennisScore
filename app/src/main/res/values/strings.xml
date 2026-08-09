@@ -9,11 +9,16 @@
     <string name="btn_resume_match">Resume Match</string>
     <string name="btn_pause_match">Pause Match</string>
     <string name="btn_setup_match">Setup New Match</string>
+    <string name="btn_edit_score">Edit Score</string>
     <string name="dialog_edit_name">Edit name</string>
+    <string name="dialog_edit_score_title">Edit score</string>
+    <string name="dialog_score_player1">%1$s score</string>
+    <string name="dialog_score_player2">%1$s score</string>
     <string name="dialog_setup_match">Setup match</string>
     <string name="dialog_hint_name">Player name</string>
     <string name="dialog_serve_label">Serve</string>
     <string name="dialog_best_of_sets">Best of sets</string>
+    <string name="score_sets_format">%1$d – %2$d</string>
     <string name="dialog_server_player1">Player 1 serves</string>
     <string name="dialog_server_player2">Player 2 serves</string>
     <string name="dialog_ok">OK</string>
@@ -29,4 +34,5 @@
     <string name="confirm_setup_match_message">Are you sure you want to stop current match?</string>
     <string name="dialog_match_winner_title">Match won</string>
     <string name="dialog_match_winner_message">%1$s wins the match.</string>
+    <string name="error_invalid_manual_score">Enter a valid in-progress score for a paused set.</string>
 </resources>
