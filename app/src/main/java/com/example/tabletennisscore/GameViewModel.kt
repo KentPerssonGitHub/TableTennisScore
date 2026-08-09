@@ -1,5 +1,6 @@
 package com.example.tabletennisscore
 
+import android.os.SystemClock
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -42,8 +43,10 @@ class GameViewModel : ViewModel() {
 
     private val current get() = _state.value!!
 
-    // Who served first in the current set (to know who serves first in the next)
-    private var setFirstServer: Int = 1
+    // First server for the match; current-set first server is derived from completed set count.
+    private var matchFirstServer: Int = 1
+    private var elapsedPlayedMs: Long = 0L
+    private var runningSinceMs: Long? = null
 
     fun addPoint(player: Int) {
         if (!current.isMatchRunning || current.matchWinner != null) return
@@ -59,7 +62,7 @@ class GameViewModel : ViewModel() {
         if (player == 1) score1++ else score2++
 
         val totalPoints = score1 + score2
-        var server = nextServer(score1, score2, totalPoints, setFirstServer)
+        var server = nextServer(score1, score2, totalPoints, currentSetFirstServer(s.setResults.size))
 
         // Check if set is won
         if (isSetWon(score1, score2)) {
@@ -71,10 +74,9 @@ class GameViewModel : ViewModel() {
             if (isMatchWon(sets1, sets2, s.bestOfSets)) {
                 matchWinner = player
                 isMatchRunning = false
+                captureElapsedUntilNow()
             } else {
-                // Next set: the player who did NOT serve first in this set serves first
-                setFirstServer = if (setFirstServer == 1) 2 else 1
-                server = setFirstServer
+                server = currentSetFirstServer(setResults.size)
             }
         }
 
@@ -98,7 +100,9 @@ class GameViewModel : ViewModel() {
 
     fun resetMatch() {
         history.clear()
-        setFirstServer = 1
+        matchFirstServer = 1
+        elapsedPlayedMs = 0L
+        runningSinceMs = null
         _state.value = GameState(
             bestOfSets = current.bestOfSets,
             player1Name = current.player1Name,
@@ -108,6 +112,9 @@ class GameViewModel : ViewModel() {
 
     fun startOrResumeMatch() {
         if (current.matchWinner != null) return
+        if (!current.isMatchRunning) {
+            runningSinceMs = SystemClock.elapsedRealtime()
+        }
         _state.value = current.copy(
             isMatchRunning = true,
             hasMatchStarted = true,
@@ -115,7 +122,19 @@ class GameViewModel : ViewModel() {
     }
 
     fun pauseMatch() {
+        if (current.isMatchRunning) {
+            captureElapsedUntilNow()
+        }
         _state.value = current.copy(isMatchRunning = false)
+    }
+
+    fun getElapsedPlayedMs(nowMs: Long = SystemClock.elapsedRealtime()): Long {
+        val startedAt = runningSinceMs
+        return if (current.isMatchRunning && startedAt != null) {
+            elapsedPlayedMs + (nowMs - startedAt)
+        } else {
+            elapsedPlayedMs
+        }
     }
 
     fun updatePausedScore(score1: Int, score2: Int): Boolean {
@@ -125,7 +144,7 @@ class GameViewModel : ViewModel() {
 
         pushHistory()
         val totalPoints = score1 + score2
-        val server = nextServer(score1, score2, totalPoints, setFirstServer)
+        val server = nextServer(score1, score2, totalPoints, currentSetFirstServer(current.setResults.size))
         _state.value = current.copy(
             score1 = score1,
             score2 = score2,
@@ -134,13 +153,47 @@ class GameViewModel : ViewModel() {
         return true
     }
 
+    fun updatePausedMatchScores(setResults: List<Pair<Int, Int>>, currentScore1: Int, currentScore2: Int): Boolean {
+        if (current.isMatchRunning || current.matchWinner != null || !current.hasMatchStarted) return false
+        if (currentScore1 < 0 || currentScore2 < 0) return false
+        if (isSetWon(currentScore1, currentScore2)) return false
+
+        var sets1 = 0
+        var sets2 = 0
+        for ((set1, set2) in setResults) {
+            if (set1 < 0 || set2 < 0) return false
+            if (!isSetWon(set1, set2)) return false
+            if (set1 > set2) sets1++ else sets2++
+        }
+        if (isMatchWon(sets1, sets2, current.bestOfSets)) return false
+
+        pushHistory()
+        val server = nextServer(
+            currentScore1,
+            currentScore2,
+            currentScore1 + currentScore2,
+            currentSetFirstServer(setResults.size),
+        )
+        _state.value = current.copy(
+            score1 = currentScore1,
+            score2 = currentScore2,
+            sets1 = sets1,
+            sets2 = sets2,
+            setResults = setResults,
+            server = server,
+        )
+        return true
+    }
+
     fun setupMatch(player1Name: String, player2Name: String, firstServer: Int, bestOfSets: Int) {
         history.clear()
-        setFirstServer = if (firstServer == 2) 2 else 1
+        matchFirstServer = if (firstServer == 2) 2 else 1
+        elapsedPlayedMs = 0L
+        runningSinceMs = null
         val validatedBestOf = if (bestOfSets in setOf(1, 3, 5, 7)) bestOfSets else 5
         _state.value = GameState(
             bestOfSets = validatedBestOf,
-            server = setFirstServer,
+            server = matchFirstServer,
             player1Name = sanitizePlayerName(player1Name, "Player 1"),
             player2Name = sanitizePlayerName(player2Name, "Player 2"),
             isMatchRunning = false,
@@ -164,6 +217,16 @@ class GameViewModel : ViewModel() {
     private fun pushHistory() {
         if (history.size >= 50) history.removeFirst()
         history.addLast(current)
+    }
+
+    private fun currentSetFirstServer(completedSetCount: Int): Int {
+        return if (completedSetCount % 2 == 0) matchFirstServer else otherPlayer(matchFirstServer)
+    }
+
+    private fun captureElapsedUntilNow() {
+        val startedAt = runningSinceMs ?: return
+        elapsedPlayedMs += SystemClock.elapsedRealtime() - startedAt
+        runningSinceMs = null
     }
 
     private fun isSetWon(s1: Int, s2: Int): Boolean {

@@ -1,11 +1,15 @@
 package com.example.tabletennisscore
 
+import android.animation.ValueAnimator
+import android.os.Handler
 import android.text.InputFilter
 import android.text.InputType
 import android.os.Bundle
+import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.animation.LinearInterpolator
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -21,12 +25,27 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.tabletennisscore.databinding.ActivityMainBinding
+import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: GameViewModel by viewModels()
     private var lastShownMatchWinner: Int? = null
+    private var rallyBallAnimator: ValueAnimator? = null
+    private var rallyBallSpinDirection = 1f
+    private val timerHandler = Handler(Looper.getMainLooper())
+    private val timerTick = object : Runnable {
+        override fun run() {
+            updateMatchTimerText()
+            if (viewModel.state.value?.isMatchRunning == true) {
+                timerHandler.postDelayed(this, 500L)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +79,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvSets.text = getString(R.string.score_sets_format, state.sets1, state.sets2)
             binding.tvPlayer1Name.text = state.player1Name
             binding.tvPlayer2Name.text = state.player2Name
+            updateMatchTimerText()
 
             binding.ivServe1.visibility = if (state.server == 1) View.VISIBLE else View.INVISIBLE
             binding.ivServe2.visibility = if (state.server == 2) View.VISIBLE else View.INVISIBLE
@@ -83,12 +103,16 @@ class MainActivity : AppCompatActivity() {
                 binding.btnSetupMatch.visibility = View.GONE
                 binding.btnEditScore.visibility = View.GONE
                 binding.btnUndo.visibility = View.VISIBLE
+                startRallyBallAnimationIfNeeded()
+                startMatchTimerTickerIfNeeded()
             } else {
                 binding.btnPauseMatch.visibility = View.GONE
                 binding.btnStartMatch.visibility = if (isMatchFinished) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
                 binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished) View.VISIBLE else View.GONE
                 binding.btnUndo.visibility = if (state.hasMatchStarted) View.VISIBLE else View.GONE
+                stopRallyBallAnimation()
+                stopMatchTimerTicker()
             }
 
             if (state.matchWinner == null) {
@@ -98,6 +122,94 @@ class MainActivity : AppCompatActivity() {
                 showMatchWinnerDialog(state.matchWinner, state.player1Name, state.player2Name, state.setResults)
             }
         }
+    }
+
+    override fun onDestroy() {
+        stopRallyBallAnimation()
+        stopMatchTimerTicker()
+        super.onDestroy()
+    }
+
+    private fun startMatchTimerTickerIfNeeded() {
+        timerHandler.removeCallbacks(timerTick)
+        timerHandler.post(timerTick)
+    }
+
+    private fun stopMatchTimerTicker() {
+        timerHandler.removeCallbacks(timerTick)
+    }
+
+    private fun updateMatchTimerText() {
+        val elapsed = viewModel.getElapsedPlayedMs()
+        val totalSeconds = elapsed / 1000L
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        binding.tvMatchTimer.text = if (hours > 0) {
+            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    private fun startRallyBallAnimationIfNeeded() {
+        if (rallyBallAnimator?.isRunning == true) return
+        binding.rootLayout.post {
+            val latestState = viewModel.state.value ?: return@post
+            if (!latestState.isMatchRunning) return@post
+
+            val ball = binding.ivRallyBall
+            val leftScore = binding.tvScore1
+            val rightScore = binding.tvScore2
+            val net = binding.divider
+
+            val horizontalTravel = rightScore.x - leftScore.x
+            if (horizontalTravel <= 0f) return@post
+
+            val leftX = leftScore.x + (leftScore.width * 0.68f)
+            val rightX = rightScore.x + (rightScore.width * 0.18f)
+            val baseY = (leftScore.y + (leftScore.height * 0.58f)) - (ball.height / 2f)
+            val netTopY = net.y + (net.height * 0.20f)
+            val desiredArc = abs(rightX - leftX) * 0.20f
+            val minArcToClearNet = (baseY - netTopY) + ball.height
+            val arcHeight = maxOf(70f, minOf(220f, maxOf(desiredArc, minArcToClearNet)))
+
+            // Keep spin continuous and flip direction on each side bounce.
+            var lastT = 0f
+            var spinTurns = 0f
+            rallyBallSpinDirection = 1f
+            ball.rotation = 0f
+
+            ball.visibility = View.VISIBLE
+            rallyBallAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 1500L
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                interpolator = LinearInterpolator()
+                addUpdateListener { animator ->
+                    val t = animator.animatedValue as Float
+                    if ((lastT < 0.02f && t >= 0.02f) || (lastT > 0.98f && t <= 0.98f)) {
+                        rallyBallSpinDirection *= -1f
+                    }
+                    lastT = t
+
+                    ball.x = leftX + (rightX - leftX) * t
+                    val netArc = sin(PI.toFloat() * t)
+                    ball.y = baseY - (arcHeight * netArc)
+
+                    spinTurns += 12f * rallyBallSpinDirection
+                    ball.rotation = spinTurns
+                }
+                start()
+            }
+        }
+    }
+
+    private fun stopRallyBallAnimation() {
+        rallyBallAnimator?.cancel()
+        rallyBallAnimator = null
+        binding.ivRallyBall.rotation = 0f
+        binding.ivRallyBall.visibility = View.GONE
     }
 
     private fun showMatchWinnerDialog(winner: Int, player1Name: String, player2Name: String, setResults: List<Pair<Int, Int>>) {
@@ -228,19 +340,83 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val player1Input = buildScoreInput(getString(R.string.dialog_score_player1, state.player1Name), state.score1)
-        val player2Input = buildScoreInput(getString(R.string.dialog_score_player2, state.player2Name), state.score2)
+        val completedSetInputs = mutableListOf<Pair<EditText, EditText>>()
 
-        content.addView(player1Input)
-        content.addView(player2Input)
+        fun addSetEditorRow(labelText: String, score1: Int, score2: Int, completedSet: Boolean): Pair<EditText, EditText> {
+            val label = TextView(this).apply {
+                text = labelText
+                setTypeface(null, Typeface.BOLD)
+                setPadding(0, if (completedSet) 12 else 16, 0, 4)
+            }
+
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
+
+            val player1Input = buildScoreInput(getString(R.string.dialog_score_player1, state.player1Name), score1)
+            val player2Input = buildScoreInput(getString(R.string.dialog_score_player2, state.player2Name), score2)
+            val player1Params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = 8
+            }
+            val player2Params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 8
+            }
+
+            row.addView(player1Input, player1Params)
+            row.addView(player2Input, player2Params)
+
+            if (completedSet) {
+                val deleteSet = TextView(this).apply {
+                    text = getString(R.string.dialog_delete_set)
+                    setTypeface(null, Typeface.BOLD)
+                    setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                    setPadding(12, 0, 0, 0)
+                    setOnClickListener {
+                        content.removeView(label)
+                        content.removeView(row)
+                        completedSetInputs.remove(player1Input to player2Input)
+                    }
+                }
+                row.addView(deleteSet)
+            }
+
+            content.addView(label)
+            content.addView(row)
+            return player1Input to player2Input
+        }
+
+        state.setResults.forEachIndexed { index, set ->
+            completedSetInputs.add(
+                addSetEditorRow(getString(R.string.dialog_set_label, index + 1), set.first, set.second, completedSet = true),
+            )
+        }
+
+        val currentSetInputs = addSetEditorRow(
+            getString(R.string.dialog_current_set_label),
+            state.score1,
+            state.score2,
+            completedSet = false,
+        )
+
+        val scrollContent = ScrollView(this).apply {
+            addView(content)
+        }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.dialog_edit_score_title)
-            .setView(content)
+            .setView(scrollContent)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
-                val score1 = player1Input.text.toString().toIntOrNull() ?: 0
-                val score2 = player2Input.text.toString().toIntOrNull() ?: 0
-                if (!viewModel.updatePausedScore(score1, score2)) {
+                val completedSets = completedSetInputs.map {
+                    val score1 = it.first.text.toString().toIntOrNull() ?: 0
+                    val score2 = it.second.text.toString().toIntOrNull() ?: 0
+                    score1 to score2
+                }
+                val currentSet = (
+                    currentSetInputs.first.text.toString().toIntOrNull() ?: 0
+                ) to (
+                    currentSetInputs.second.text.toString().toIntOrNull() ?: 0
+                )
+                if (!viewModel.updatePausedMatchScores(completedSets, currentSet.first, currentSet.second)) {
                     Toast.makeText(this, R.string.error_invalid_manual_score, Toast.LENGTH_SHORT).show()
                 }
             }
