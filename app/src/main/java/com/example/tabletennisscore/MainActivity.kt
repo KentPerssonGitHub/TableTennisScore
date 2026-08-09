@@ -15,7 +15,6 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
-import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
@@ -23,6 +22,7 @@ import android.graphics.Typeface
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import com.example.tabletennisscore.databinding.ActivityMainBinding
 import java.util.Locale
@@ -34,7 +34,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: GameViewModel by viewModels()
-    private var lastShownMatchWinner: Int? = null
     private var rallyBallAnimator: ValueAnimator? = null
     private var rallyBallSpinDirection = 1f
     private val timerHandler = Handler(Looper.getMainLooper())
@@ -80,6 +79,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvPlayer1Name.text = state.player1Name
             binding.tvPlayer2Name.text = state.player2Name
             updateMatchTimerText()
+            updateMatchSummaryPanel(state)
 
             binding.ivServe1.visibility = if (state.server == 1) View.VISIBLE else View.INVISIBLE
             binding.ivServe2.visibility = if (state.server == 2) View.VISIBLE else View.INVISIBLE
@@ -115,12 +115,6 @@ class MainActivity : AppCompatActivity() {
                 stopMatchTimerTicker()
             }
 
-            if (state.matchWinner == null) {
-                lastShownMatchWinner = null
-            } else if (state.matchWinner != lastShownMatchWinner) {
-                lastShownMatchWinner = state.matchWinner
-                showMatchWinnerDialog(state.matchWinner, state.player1Name, state.player2Name, state.setResults)
-            }
         }
     }
 
@@ -141,14 +135,88 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMatchTimerText() {
         val elapsed = viewModel.getElapsedPlayedMs()
-        val totalSeconds = elapsed / 1000L
+        binding.tvMatchTimer.text = formatElapsedTime(elapsed)
+    }
+
+    private fun formatElapsedTime(elapsedMs: Long): String {
+        val totalSeconds = elapsedMs / 1000L
         val hours = totalSeconds / 3600
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
-        binding.tvMatchTimer.text = if (hours > 0) {
+        return if (hours > 0) {
             String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
         } else {
             String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    private fun updateMatchSummaryPanel(state: GameViewModel.GameState) {
+        if (state.matchWinner == null) {
+            binding.matchSummaryPanel.visibility = View.GONE
+            binding.tvMatchTimer.visibility = View.VISIBLE
+            return
+        }
+
+        val winnerName = if (state.matchWinner == 1) state.player1Name else state.player2Name
+        binding.matchSummaryPanel.visibility = View.VISIBLE
+        binding.tvMatchTimer.visibility = View.GONE
+        binding.tvMatchSummaryWinner.text = getString(R.string.match_summary_winner, winnerName)
+        renderMatchSummaryScoreTable(state)
+        binding.tvMatchSummaryTime.text = getString(
+            R.string.match_summary_time,
+            formatElapsedTime(viewModel.getElapsedPlayedMs()),
+        )
+
+        // Position panel on the winning player's side of the screen
+        val margin = (12 * resources.displayMetrics.density).toInt()
+        ConstraintSet().apply {
+            clone(binding.rootLayout)
+            clear(R.id.matchSummaryPanel, ConstraintSet.START)
+            clear(R.id.matchSummaryPanel, ConstraintSet.END)
+            if (state.matchWinner == 1) {
+                // Left-aligned, fills up to 75% of left half
+                constrainWidth(R.id.matchSummaryPanel, 0)
+                connect(R.id.matchSummaryPanel, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin)
+                connect(R.id.matchSummaryPanel, ConstraintSet.END, R.id.guidelineP1SummaryEnd, ConstraintSet.START, 0)
+            } else {
+                // Starts at center divider, exactly 75% of the right half wide
+                constrainWidth(R.id.matchSummaryPanel, 0)
+                constrainDefaultWidth(R.id.matchSummaryPanel, ConstraintSet.MATCH_CONSTRAINT_SPREAD)
+                connect(R.id.matchSummaryPanel, ConstraintSet.START, R.id.divider, ConstraintSet.END, margin)
+                connect(R.id.matchSummaryPanel, ConstraintSet.END, R.id.guidelineP2SummaryEnd, ConstraintSet.START, 0)
+            }
+            connect(R.id.matchSummaryPanel, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, margin)
+            applyTo(binding.rootLayout)
+        }
+    }
+
+    private fun renderMatchSummaryScoreTable(state: GameViewModel.GameState) {
+        val table = binding.tableMatchSummaryScores
+        table.removeAllViews()
+        val density = resources.displayMetrics.density
+        fun Int.dp() = (this * density).toInt()
+
+        fun cell(text: String, textSizeSp: Float, grav: Int, bold: Boolean = false, minW: Int = 0, marginEnd: Int = 0) =
+            TextView(this).apply {
+                this.text = text
+                textSize = textSizeSp
+                gravity = grav
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.score_text))
+                if (bold) setTypeface(typeface, Typeface.BOLD)
+                if (minW > 0) minWidth = minW.dp()
+                layoutParams = TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT, TableRow.LayoutParams.WRAP_CONTENT)
+                    .also { if (marginEnd > 0) it.marginEnd = marginEnd.dp() }
+            }
+
+        listOf(
+            Triple(state.player1Name, state.sets1, state.setResults.map { it.first }),
+            Triple(state.player2Name, state.sets2, state.setResults.map { it.second }),
+        ).forEach { (name, sets, scores) ->
+            table.addView(TableRow(this).apply {
+                addView(cell(name, 12f, Gravity.START or Gravity.CENTER_VERTICAL, bold = true, minW = 68, marginEnd = 8))
+                addView(cell(sets.toString(), 16f, Gravity.CENTER, bold = true, minW = 22, marginEnd = 10))
+                scores.forEach { addView(cell(it.toString(), 12f, Gravity.CENTER, minW = 18, marginEnd = 4)) }
+            })
         }
     }
 
@@ -212,84 +280,6 @@ class MainActivity : AppCompatActivity() {
         binding.ivRallyBall.visibility = View.GONE
     }
 
-    private fun showMatchWinnerDialog(winner: Int, player1Name: String, player2Name: String, setResults: List<Pair<Int, Int>>) {
-        val winnerName = if (winner == 1) player1Name else player2Name
-        val state = viewModel.state.value ?: return
-        val density = resources.displayMetrics.density
-        fun Int.dp() = (this * density).toInt()
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24.dp(), 20.dp(), 24.dp(), 8.dp())
-        }
-
-        // Winner announcement
-        container.addView(TextView(this).apply {
-            text = getString(R.string.dialog_match_winner_message, winnerName)
-            textSize = 16f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 20.dp())
-        })
-
-        // Score table: columns = [name | sets | set1 | set2 | ...]
-        val table = TableLayout(this).apply {
-            isStretchAllColumns = false
-        }
-
-        val scoreColWidth = 36.dp()
-
-        fun makeNameCell(name: String) = TextView(this).apply {
-            text = name
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            setPadding(0, 6.dp(), 20.dp(), 6.dp())
-        }
-
-        fun makeScoreCell(score: String, bold: Boolean) = TextView(this).apply {
-            text = score
-            textSize = 14f
-            gravity = Gravity.CENTER
-            if (bold) setTypeface(null, Typeface.BOLD)
-            layoutParams = TableRow.LayoutParams(scoreColWidth, TableRow.LayoutParams.WRAP_CONTENT)
-            setPadding(4.dp(), 6.dp(), 4.dp(), 6.dp())
-        }
-
-        val row1 = TableRow(this)
-        val row2 = TableRow(this)
-
-        row1.addView(makeNameCell(player1Name))
-        row2.addView(makeNameCell(player2Name))
-
-        // Sets won column – larger font to stand out
-        fun makeSetsWonCell(score: String) = TextView(this).apply {
-            text = score
-            textSize = 20f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            layoutParams = TableRow.LayoutParams(scoreColWidth + 16.dp(), TableRow.LayoutParams.WRAP_CONTENT)
-            setPadding(4.dp(), 4.dp(), 20.dp(), 4.dp())
-        }
-        row1.addView(makeSetsWonCell(state.sets1.toString()))
-        row2.addView(makeSetsWonCell(state.sets2.toString()))
-
-        // Per-set scores
-        setResults.forEach { (s1, s2) ->
-            row1.addView(makeScoreCell(s1.toString(), s1 > s2))
-            row2.addView(makeScoreCell(s2.toString(), s2 > s1))
-        }
-
-        table.addView(row1)
-        table.addView(row2)
-        container.addView(table)
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.dialog_match_winner_title)
-            .setView(container)
-            .setPositiveButton(R.string.dialog_ok, null)
-            .show()
-    }
 
     private fun showEditNameDialog(player: Int) {
         val state = viewModel.state.value ?: return

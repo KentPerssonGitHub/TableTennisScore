@@ -254,5 +254,58 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
+    <!-- 37.5% = 75% of left half; right counterpart at 62.5% -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guidelineP1SummaryEnd"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.375" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guidelineP2SummaryEnd"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.875" />
+
+    <LinearLayout
+        android:id="@+id/matchSummaryPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#66000000"
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guidelineP1SummaryEnd"
+        app:layout_constraintWidth_default="wrap"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <TextView
+            android:id="@+id/tvMatchSummaryWinner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/score_text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TableLayout
+            android:id="@+id/tableMatchSummaryScores"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tvMatchSummaryTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:alpha="0.85"
+            android:textColor="@color/score_text"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
