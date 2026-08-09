@@ -12,6 +12,7 @@
     <string name="dialog_edit_name">Edit name</string>
     <string name="dialog_setup_match">Setup match</string>
     <string name="dialog_hint_name">Player name</string>
+    <string name="dialog_serve_label">Serve</string>
     <string name="dialog_best_of_sets">Best of sets</string>
     <string name="dialog_server_player1">Player 1 serves</string>
     <string name="dialog_server_player2">Player 2 serves</string>

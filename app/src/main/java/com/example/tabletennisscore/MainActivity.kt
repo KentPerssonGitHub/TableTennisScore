@@ -8,6 +8,7 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.graphics.Typeface
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -172,20 +173,77 @@ class MainActivity : AppCompatActivity() {
             setSelection(text.length)
         }
 
-        val serverGroup = RadioGroup(this).apply {
-            orientation = RadioGroup.HORIZONTAL
+        val player1Row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
         }
+        val player2Row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val serveHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val nameLayoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val selectorLayoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+        val serveLabelLayoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+
+        player1Input.layoutParams = nameLayoutParams
+        player2Input.layoutParams = nameLayoutParams
+
+        val serveLabelSpacer = androidx.appcompat.widget.AppCompatTextView(this).apply {
+            layoutParams = nameLayoutParams
+        }
+        val serveLabel = androidx.appcompat.widget.AppCompatTextView(this).apply {
+            text = getString(R.string.dialog_serve_label)
+            textSize = 12f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
+            layoutParams = serveLabelLayoutParams
+            setPadding(0, 0, 0, 4)
+        }
+
         val player1ServeOption = RadioButton(this).apply {
             id = View.generateViewId()
-            text = getString(R.string.dialog_server_player1)
+            contentDescription = getString(R.string.dialog_server_player1)
+            layoutParams = selectorLayoutParams
         }
         val player2ServeOption = RadioButton(this).apply {
             id = View.generateViewId()
-            text = getString(R.string.dialog_server_player2)
+            contentDescription = getString(R.string.dialog_server_player2)
+            layoutParams = selectorLayoutParams
         }
-        serverGroup.addView(player1ServeOption)
-        serverGroup.addView(player2ServeOption)
-        serverGroup.check(if (state.server == 2) player2ServeOption.id else player1ServeOption.id)
+
+        player1ServeOption.setOnClickListener {
+            player1ServeOption.isChecked = true
+            player2ServeOption.isChecked = false
+        }
+        player2ServeOption.setOnClickListener {
+            player2ServeOption.isChecked = true
+            player1ServeOption.isChecked = false
+        }
+
+        if (state.server == 2) {
+            player2ServeOption.isChecked = true
+            player1ServeOption.isChecked = false
+        } else {
+            player1ServeOption.isChecked = true
+            player2ServeOption.isChecked = false
+        }
+
+        player1Row.addView(player1Input)
+        player1Row.addView(player1ServeOption)
+        player2Row.addView(player2Input)
+        player2Row.addView(player2ServeOption)
+
+        serveHeaderRow.addView(serveLabelSpacer)
+        serveHeaderRow.addView(serveLabel)
 
         val bestOfLabel = androidx.appcompat.widget.AppCompatTextView(this).apply {
             text = getString(R.string.dialog_best_of_sets)
@@ -222,9 +280,9 @@ class MainActivity : AppCompatActivity() {
             else -> bestOfGroup.check(bestOf5.id)
         }
 
-        content.addView(player1Input)
-        content.addView(player2Input)
-        content.addView(serverGroup)
+        content.addView(serveHeaderRow)
+        content.addView(player1Row)
+        content.addView(player2Row)
         content.addView(bestOfLabel)
         content.addView(bestOfGroup)
 
@@ -236,7 +294,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.dialog_setup_match)
             .setView(scrollContent)
             .setPositiveButton(R.string.dialog_done) { _, _ ->
-                val firstServer = if (serverGroup.checkedRadioButtonId == player2ServeOption.id) 2 else 1
+                val firstServer = if (player2ServeOption.isChecked) 2 else 1
                 val selectedBestOf = when (bestOfGroup.checkedRadioButtonId) {
                     bestOf1.id -> 1
                     bestOf3.id -> 3
