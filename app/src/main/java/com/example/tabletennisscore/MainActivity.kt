@@ -60,18 +60,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupClickListeners() {
         // Score taps – tap the score area to add a point
-        binding.tvScore1.setOnClickListener { viewModel.addPoint(1) }
-        binding.tvScore2.setOnClickListener { viewModel.addPoint(2) }
+        binding.tvScore1.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
+        }
+        binding.tvScore2.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
+        }
 
         // Name taps – tap name to edit
-        binding.tvPlayer1Name.setOnClickListener { showEditNameDialog(1) }
-        binding.tvPlayer2Name.setOnClickListener { showEditNameDialog(2) }
+        binding.tvPlayer1Name.setOnClickListener {
+            showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
+        }
+        binding.tvPlayer2Name.setOnClickListener {
+            showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
+        }
 
         binding.btnSetupMatch.setOnClickListener { confirmSetupMatch() }
         binding.btnEditScore.setOnClickListener { showEditScoreDialog() }
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndo.setOnClickListener { viewModel.undo() }
+        binding.btnSwapSides.setOnClickListener { viewModel.swapSides() }
         setupServeBallDrag()
     }
 
@@ -115,16 +124,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeState() {
         viewModel.state.observe(this) { state ->
-            binding.tvScore1.text = state.score1.toString()
-            binding.tvScore2.text = state.score2.toString()
-            binding.tvSets.text = getString(R.string.score_sets_format, state.sets1, state.sets2)
-            binding.tvPlayer1Name.text = state.player1Name
-            binding.tvPlayer2Name.text = state.player2Name
+            val p1OnLeft = !state.sidesSwapped
+            binding.tvPlayer1Name.text = if (p1OnLeft) state.player1Name else state.player2Name
+            binding.tvPlayer2Name.text = if (p1OnLeft) state.player2Name else state.player1Name
+            binding.tvScore1.text = (if (p1OnLeft) state.score1 else state.score2).toString()
+            binding.tvScore2.text = (if (p1OnLeft) state.score2 else state.score1).toString()
+            val leftSets = if (p1OnLeft) state.sets1 else state.sets2
+            val rightSets = if (p1OnLeft) state.sets2 else state.sets1
+            binding.tvSets.text = getString(R.string.score_sets_format, leftSets, rightSets)
             updateMatchTimerText()
             updateMatchSummaryPanel(state)
 
-            binding.ivServe1.visibility = if (state.server == 1) View.VISIBLE else View.INVISIBLE
-            binding.ivServe2.visibility = if (state.server == 2) View.VISIBLE else View.INVISIBLE
+            // Serve indicator follows the player, not the side
+            val leftServing = (p1OnLeft && state.server == 1) || (!p1OnLeft && state.server == 2)
+            binding.ivServe1.visibility = if (leftServing) View.VISIBLE else View.INVISIBLE
+            binding.ivServe2.visibility = if (!leftServing) View.VISIBLE else View.INVISIBLE
 
             val backgroundColor = when {
                 state.isMatchRunning -> R.color.background_running
@@ -144,6 +158,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnStartMatch.visibility = View.GONE
                 binding.btnSetupMatch.visibility = View.GONE
                 binding.btnEditScore.visibility = View.GONE
+                binding.btnSwapSides.visibility = View.GONE
                 binding.btnUndo.visibility = View.VISIBLE
                 startRallyBallAnimationIfNeeded()
                 startMatchTimerTickerIfNeeded()
@@ -152,6 +167,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnStartMatch.visibility = if (isMatchFinished) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
                 binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished) View.VISIBLE else View.GONE
+                binding.btnSwapSides.visibility = if (state.hasMatchStarted && !isMatchFinished) View.VISIBLE else View.GONE
                 binding.btnUndo.visibility = if (state.hasMatchStarted) View.VISIBLE else View.GONE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()
@@ -209,13 +225,14 @@ class MainActivity : AppCompatActivity() {
             formatElapsedTime(viewModel.getElapsedPlayedMs()),
         )
 
-        // Position panel on the winning player's side of the screen
+        // Position panel on the winning player's displayed side of the screen
+        val winnerOnLeft = (state.matchWinner == 1) != state.sidesSwapped
         val margin = (12 * resources.displayMetrics.density).toInt()
         ConstraintSet().apply {
             clone(binding.rootLayout)
             clear(R.id.matchSummaryPanel, ConstraintSet.START)
             clear(R.id.matchSummaryPanel, ConstraintSet.END)
-            if (state.matchWinner == 1) {
+            if (winnerOnLeft) {
                 // Left-aligned, fills up to 75% of left half
                 constrainWidth(R.id.matchSummaryPanel, 0)
                 connect(R.id.matchSummaryPanel, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin)

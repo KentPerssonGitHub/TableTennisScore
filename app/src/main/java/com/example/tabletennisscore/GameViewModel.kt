@@ -33,6 +33,7 @@ class GameViewModel : ViewModel() {
         val hasMatchStarted: Boolean = false,
         val matchWinner: Int? = null, // 1 or 2 when match is finished
         val setResults: List<Pair<Int, Int>> = emptyList(), // score1 to score2 per completed set
+        val sidesSwapped: Boolean = false, // true when players have physically swapped ends
     )
 
     private val _state = MutableLiveData(GameState())
@@ -55,6 +56,12 @@ class GameViewModel : ViewModel() {
         _state.value = current.copy(server = otherPlayer(current.server))
     }
 
+    fun swapSides() {
+        if (current.matchWinner != null) return
+        pushHistory()
+        _state.value = current.copy(sidesSwapped = !current.sidesSwapped)
+    }
+
     fun addPoint(player: Int) {
         if (!current.isMatchRunning || current.matchWinner != null) return
         pushHistory()
@@ -65,6 +72,7 @@ class GameViewModel : ViewModel() {
         var sets2 = s.sets2
         var isMatchRunning = s.isMatchRunning
         var matchWinner = s.matchWinner
+        var sidesSwapped = s.sidesSwapped
         val setResults = s.setResults.toMutableList()
         if (player == 1) score1++ else score2++
 
@@ -82,7 +90,9 @@ class GameViewModel : ViewModel() {
                 matchWinner = player
                 isMatchRunning = false
                 captureElapsedUntilNow()
+                // Match over — do NOT swap sides
             } else {
+                sidesSwapped = !sidesSwapped // players switch ends after each set
                 server = currentSetFirstServer(setResults.size)
             }
         }
@@ -96,6 +106,7 @@ class GameViewModel : ViewModel() {
             isMatchRunning = isMatchRunning,
             matchWinner = matchWinner,
             setResults = setResults,
+            sidesSwapped = sidesSwapped,
         )
     }
 
@@ -182,6 +193,8 @@ class GameViewModel : ViewModel() {
             val finalSets2 = sets2 + if (setWinner == 2) 1 else 0
             val finalSetResults = setResults + listOf(currentScore1 to currentScore2)
             val matchWinner = if (isMatchWon(finalSets1, finalSets2, current.bestOfSets)) setWinner else null
+            // Only swap sides if the match is not over
+            val newSidesSwapped = if (matchWinner != null) current.sidesSwapped else !current.sidesSwapped
             _state.value = current.copy(
                 score1 = 0,
                 score2 = 0,
@@ -191,6 +204,7 @@ class GameViewModel : ViewModel() {
                 server = currentSetFirstServer(finalSetResults.size),
                 isMatchRunning = false,
                 matchWinner = matchWinner,
+                sidesSwapped = newSidesSwapped,
             )
         } else {
             val server = nextServer(

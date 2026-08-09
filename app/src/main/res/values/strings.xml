@@ -38,6 +38,7 @@
     <string name="confirm_setup_match_message">Are you sure you want to stop current match?</string>
     <string name="dialog_match_winner_title">Match won</string>
     <string name="dialog_match_winner_message">%1$s wins the match.</string>
+    <string name="btn_swap_sides">⇄ Swap Sides</string>
     <string name="match_summary_winner">%1$s wins</string>
     <string name="match_summary_time">Time: %1$s</string>
     <string name="error_invalid_manual_score">Enter valid scores for completed sets and the current in-progress set.</string>
