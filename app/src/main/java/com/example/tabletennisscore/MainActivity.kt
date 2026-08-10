@@ -70,12 +70,14 @@ class MainActivity : AppCompatActivity() {
             viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
         }
 
-        // Name taps – tap name to edit
-        binding.tvPlayer1Name.setOnClickListener {
+        // Name long-press – long-press name to edit to avoid accidental taps near swap icon
+        binding.tvPlayer1Name.setOnLongClickListener {
             showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
+            true
         }
-        binding.tvPlayer2Name.setOnClickListener {
+        binding.tvPlayer2Name.setOnLongClickListener {
             showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
+            true
         }
 
         binding.btnSetupMatch.setOnClickListener { confirmSetupMatch() }
@@ -83,7 +85,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndo.setOnClickListener { viewModel.undo() }
-        binding.btnSwapSides.setOnClickListener { viewModel.swapSides() }
+        binding.ivSwapSides.setOnLongClickListener {
+            viewModel.swapSides()
+            true
+        }
         setupServeBallDrag()
     }
 
@@ -180,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnStartMatch.visibility = View.GONE
                 binding.btnSetupMatch.visibility = View.GONE
                 binding.btnEditScore.visibility = View.GONE
-                binding.btnSwapSides.visibility = View.GONE
+                binding.ivSwapSides.visibility = View.GONE
                 binding.btnUndo.visibility = View.VISIBLE
                 startRallyBallAnimationIfNeeded()
                 startMatchTimerTickerIfNeeded()
@@ -189,7 +194,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
                 binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
-                binding.btnSwapSides.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+                binding.ivSwapSides.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 binding.btnUndo.visibility = if (state.hasMatchStarted && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()

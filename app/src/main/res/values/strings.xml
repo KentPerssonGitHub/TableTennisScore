@@ -32,6 +32,7 @@
     <string name="dialog_cancel">Cancel</string>
     <string name="cd_edit_player1">Edit player 1 name</string>
     <string name="cd_edit_player2">Edit player 2 name</string>
+    <string name="cd_swap_sides">Swap sides</string>
     <string name="cd_serve_indicator">Serve indicator</string>
     <string name="confirm_reset_title">Reset match?</string>
     <string name="confirm_reset_message">This will reset all scores and sets.</string>
