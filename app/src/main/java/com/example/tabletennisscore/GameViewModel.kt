@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import java.util.Locale
 
 /**
  * Holds all game state and enforces table tennis scoring rules.
@@ -17,7 +18,7 @@ import androidx.lifecycle.ViewModel
 class GameViewModel : ViewModel() {
 
     companion object {
-        const val MAX_PLAYER_NAME_LENGTH = 12
+        const val MAX_PLAYER_NAME_LENGTH = 13
     }
 
     data class GameState(
@@ -310,6 +311,12 @@ class GameViewModel : ViewModel() {
     private fun sanitizePlayerName(name: String, fallback: String): String {
         return name
             .trim()
+            .split(Regex("\\s+"))
+            .joinToString(" ") { word ->
+                word.lowercase(Locale.getDefault()).replaceFirstChar { first ->
+                    if (first.isLowerCase()) first.titlecase(Locale.getDefault()) else first.toString()
+                }
+            }
             .take(MAX_PLAYER_NAME_LENGTH)
             .ifEmpty { fallback }
     }

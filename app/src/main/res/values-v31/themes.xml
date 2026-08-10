@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TableTennisScore.Startup" parent="Theme.TableTennisScore">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_transparent_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">@color/background</item>
+    </style>
+</resources>
+
+
+
