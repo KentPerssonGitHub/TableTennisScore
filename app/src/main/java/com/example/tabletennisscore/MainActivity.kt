@@ -9,8 +9,10 @@ import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.KeyEvent
 import android.view.animation.LinearInterpolator
 import android.view.MotionEvent
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -95,7 +97,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupServeBallDrag() {
         val dragListener = View.OnTouchListener { view, event ->
             val state = viewModel.state.value ?: return@OnTouchListener false
-            if (!state.hasMatchStarted || state.matchWinner != null) return@OnTouchListener false
+            if (state.matchWinner != null) return@OnTouchListener false
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     serveDragStartRawX = event.rawX
@@ -194,7 +196,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
                 binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
-                binding.ivSwapSides.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+                binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 binding.btnUndo.visibility = if (state.hasMatchStarted && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()
@@ -372,22 +374,42 @@ class MainActivity : AppCompatActivity() {
     private fun showEditNameDialog(player: Int) {
         val state = viewModel.state.value ?: return
         val currentName = if (player == 1) state.player1Name else state.player2Name
+        val defaultName = if (player == 1) getString(R.string.player1_default) else getString(R.string.player2_default)
+        val isDefaultName = currentName == defaultName
 
         val editText = EditText(this).apply {
-            setText(currentName)
-            selectAll()
+            setText(if (isDefaultName) "" else currentName)
+            if (!isDefaultName) {
+                selectAll()
+            }
             hint = getString(R.string.dialog_hint_name)
             filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            maxLines = 1
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(getString(R.string.dialog_edit_name))
             .setView(editText)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
                 viewModel.setPlayerName(player, editText.text.toString())
             }
             .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            editText.setOnEditorActionListener { _, actionId, event ->
+                val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
+                if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                    okButton.performClick()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun showEditScoreDialog() {
@@ -542,91 +564,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(horizontalPadding, topPadding, horizontalPadding, 0)
         }
 
-        val player1Input = EditText(this).apply {
-            hint = getString(R.string.player1_default)
-            setText(state.player1Name)
-            setSelection(text.length)
-            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
-        }
-        val player2Input = EditText(this).apply {
-            hint = getString(R.string.player2_default)
-            setText(state.player2Name)
-            setSelection(text.length)
-            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
-        }
-
-        val player1Row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        val player2Row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        val serveHeaderRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        val nameLayoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        val selectorLayoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        )
-        val serveLabelLayoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        )
-
-        player1Input.layoutParams = nameLayoutParams
-        player2Input.layoutParams = nameLayoutParams
-
-        val serveLabelSpacer = androidx.appcompat.widget.AppCompatTextView(this).apply {
-            layoutParams = nameLayoutParams
-        }
-        val serveLabel = androidx.appcompat.widget.AppCompatTextView(this).apply {
-            text = getString(R.string.dialog_serve_label)
-            textSize = 12f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
-            layoutParams = serveLabelLayoutParams
-            setPadding(0, 0, 0, 4)
-        }
-
-        val player1ServeOption = RadioButton(this).apply {
-            id = View.generateViewId()
-            contentDescription = getString(R.string.dialog_server_player1)
-            layoutParams = selectorLayoutParams
-        }
-        val player2ServeOption = RadioButton(this).apply {
-            id = View.generateViewId()
-            contentDescription = getString(R.string.dialog_server_player2)
-            layoutParams = selectorLayoutParams
-        }
-
-        player1ServeOption.setOnClickListener {
-            player1ServeOption.isChecked = true
-            player2ServeOption.isChecked = false
-        }
-        player2ServeOption.setOnClickListener {
-            player2ServeOption.isChecked = true
-            player1ServeOption.isChecked = false
-        }
-
-        if (state.server == 2) {
-            player2ServeOption.isChecked = true
-            player1ServeOption.isChecked = false
-        } else {
-            player1ServeOption.isChecked = true
-            player2ServeOption.isChecked = false
-        }
-
-        player1Row.addView(player1Input)
-        player1Row.addView(player1ServeOption)
-        player2Row.addView(player2Input)
-        player2Row.addView(player2ServeOption)
-
-        serveHeaderRow.addView(serveLabelSpacer)
-        serveHeaderRow.addView(serveLabel)
-
         val bestOfRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -671,9 +608,6 @@ class MainActivity : AppCompatActivity() {
         bestOfRow.addView(bestOfLabel)
         bestOfRow.addView(bestOfGroup)
 
-        content.addView(serveHeaderRow)
-        content.addView(player1Row)
-        content.addView(player2Row)
         content.addView(bestOfRow)
 
         val scrollContent = ScrollView(this).apply {
@@ -684,7 +618,6 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.dialog_setup_match)
             .setView(scrollContent)
             .setPositiveButton(R.string.dialog_done) { _, _ ->
-                val firstServer = if (player2ServeOption.isChecked) 2 else 1
                 val selectedBestOf = when (bestOfGroup.checkedRadioButtonId) {
                     bestOf1.id -> 1
                     bestOf3.id -> 3
@@ -692,9 +625,9 @@ class MainActivity : AppCompatActivity() {
                     else -> 5
                 }
                 viewModel.setupMatch(
-                    player1Name = player1Input.text.toString(),
-                    player2Name = player2Input.text.toString(),
-                    firstServer = firstServer,
+                    player1Name = state.player1Name,
+                    player2Name = state.player2Name,
+                    firstServer = state.server,
                     bestOfSets = selectedBestOf,
                 )
             }
