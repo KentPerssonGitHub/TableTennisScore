@@ -14,6 +14,7 @@
         android:src="@drawable/oscarwithtrulsandkallberg" />
 
     <TextView
+        android:id="@+id/tvSplashTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
@@ -26,6 +27,14 @@
         android:textColor="@android:color/white"
         android:textSize="44sp"
         android:textStyle="bold" />
+
+    <ImageView
+        android:id="@+id/ivSplashBall"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:contentDescription="@null"
+        android:scaleType="fitCenter"
+        android:src="@drawable/stigaperform40size128" />
 
     <TextView
         android:id="@+id/tvTapToContinue"
