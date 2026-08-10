@@ -247,9 +247,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         val winnerName = if (state.matchWinner == 1) state.player1Name else state.player2Name
+        val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
         binding.matchSummaryPanel.visibility = View.VISIBLE
         binding.tvMatchTimer.visibility = View.GONE
         binding.tvMatchSummaryWinner.text = getString(R.string.match_summary_winner, winnerName)
+        binding.tvMatchSummaryWinner.setTextColor(winnerColor)
         renderMatchSummaryScoreTable(state)
         binding.tvMatchSummaryTime.text = getString(
             R.string.match_summary_time,
@@ -284,14 +286,17 @@ class MainActivity : AppCompatActivity() {
         val table = binding.tableMatchSummaryScores
         table.removeAllViews()
         val density = resources.displayMetrics.density
+        val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
+        val loserColor = ContextCompat.getColor(this, R.color.summary_loser_text)
+        val whiteColor = ContextCompat.getColor(this, android.R.color.white)
         fun Int.dp() = (this * density).toInt()
 
-        fun cell(text: String, textSizeSp: Float, grav: Int, bold: Boolean = false, minW: Int = 0, marginEnd: Int = 0) =
+        fun cell(text: String, textSizeSp: Float, grav: Int, textColor: Int, bold: Boolean = false, minW: Int = 0, marginEnd: Int = 0) =
             TextView(this).apply {
                 this.text = text
                 textSize = textSizeSp
                 gravity = grav
-                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.score_text))
+                setTextColor(textColor)
                 if (bold) setTypeface(typeface, Typeface.BOLD)
                 if (minW > 0) minWidth = minW.dp()
                 layoutParams = TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT, TableRow.LayoutParams.WRAP_CONTENT)
@@ -299,16 +304,31 @@ class MainActivity : AppCompatActivity() {
             }
 
         listOf(
-            Triple(state.player1Name, state.sets1, state.setResults.map { it.first }),
-            Triple(state.player2Name, state.sets2, state.setResults.map { it.second }),
-        ).forEach { (name, sets, scores) ->
+            Quadruple(1, state.player1Name, state.sets1, state.setResults.map { it.first }),
+            Quadruple(2, state.player2Name, state.sets2, state.setResults.map { it.second }),
+        ).forEach { (player, name, sets, _) ->
+            val isWinner = player == state.matchWinner
+            val nameColor = if (isWinner) winnerColor else whiteColor
+            val setCountColor = if (isWinner) winnerColor else loserColor
             table.addView(TableRow(this).apply {
-                addView(cell(name, 12f, Gravity.START or Gravity.CENTER_VERTICAL, bold = true, minW = 68, marginEnd = 8))
-                addView(cell(sets.toString(), 16f, Gravity.CENTER, bold = true, minW = 22, marginEnd = 10))
-                scores.forEach { addView(cell(it.toString(), 12f, Gravity.CENTER, minW = 18, marginEnd = 4)) }
+                addView(cell(name, 12f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 68, marginEnd = 8))
+                addView(cell(sets.toString(), 16f, Gravity.CENTER, setCountColor, bold = false, minW = 22, marginEnd = 10))
+                state.setResults.forEach { setResult ->
+                    val playerScore = if (player == 1) setResult.first else setResult.second
+                    val wonThisSet = if (player == 1) setResult.first > setResult.second else setResult.second > setResult.first
+                    val scoreColor = if (wonThisSet) winnerColor else whiteColor
+                    addView(cell(playerScore.toString(), 12f, Gravity.CENTER, scoreColor, minW = 18, marginEnd = 4))
+                }
             })
         }
     }
+
+    private data class Quadruple<A, B, C, D>(
+        val first: A,
+        val second: B,
+        val third: C,
+        val fourth: D,
+    )
 
     private fun startRallyBallAnimationIfNeeded() {
         if (rallyBallAnimator?.isRunning == true) return
@@ -445,7 +465,7 @@ class MainActivity : AppCompatActivity() {
         fun addSetEditorRow(labelText: String, score1: Int, score2: Int, completedSet: Boolean): Pair<EditText, EditText> {
             val label = TextView(this).apply {
                 text = labelText
-                setTypeface(null, Typeface.BOLD)
+                setTypeface(null, Typeface.NORMAL)
                 setPadding(0, if (completedSet) 12 else 16, 0, 4)
             }
 
@@ -468,7 +488,7 @@ class MainActivity : AppCompatActivity() {
             if (completedSet) {
                 val deleteSet = TextView(this).apply {
                     text = getString(R.string.dialog_delete_set)
-                    setTypeface(null, Typeface.BOLD)
+                    setTypeface(null, Typeface.NORMAL)
                     setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
                     setPadding(12, 0, 0, 0)
                     setOnClickListener {
