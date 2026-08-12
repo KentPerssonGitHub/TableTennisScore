@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.text.TextUtils
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -209,9 +210,11 @@ class HistoryActivity : AppCompatActivity() {
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                     maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     if (bold) setTypeface(typeface, Typeface.BOLD)
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2.6f).apply {
+                    // Fixed width keeps the set-count box aligned across 1/3/5/7 set variants.
+                    layoutParams = LinearLayout.LayoutParams(130.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                         marginEnd = 10.dp()
                     }
                 }
@@ -222,10 +225,12 @@ class HistoryActivity : AppCompatActivity() {
                     this.text = text
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                    includeFontPadding = false
+                    isSingleLine = true
                     gravity = Gravity.CENTER
                     setTypeface(typeface, Typeface.BOLD)
                     setBackgroundResource(backgroundRes)
-                    setPadding(4.dp(), 1.dp(), 4.dp(), 1.dp())
+                    setPadding(4.dp(), 0, 4.dp(), 0)
                     layoutParams = LinearLayout.LayoutParams(30.dp(), 30.dp()).apply {
                         marginEnd = 8.dp()
                     }

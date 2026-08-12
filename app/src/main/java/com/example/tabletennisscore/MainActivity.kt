@@ -316,9 +316,9 @@ class MainActivity : AppCompatActivity() {
         table.removeAllViews()
         val density = resources.displayMetrics.density
         val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
-        val loserColor = ContextCompat.getColor(this, R.color.summary_loser_text)
         val whiteColor = ContextCompat.getColor(this, android.R.color.white)
         fun Int.dp() = (this * density).toInt()
+        val setBoxSize = 24.dp()
 
         fun cell(text: String, textSizeSp: Float, grav: Int, textColor: Int, bold: Boolean = false, minW: Int = 0, marginEnd: Int = 0) =
             TextView(this).apply {
@@ -332,21 +332,35 @@ class MainActivity : AppCompatActivity() {
                     .also { if (marginEnd > 0) it.marginEnd = marginEnd.dp() }
             }
 
+        fun setCountCell(text: String, winnerRow: Boolean) = TextView(this).apply {
+            this.text = text
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setTextColor(whiteColor)
+            includeFontPadding = false
+            isSingleLine = true
+            setTypeface(typeface, Typeface.BOLD)
+            setBackgroundResource(
+                if (winnerRow) R.drawable.history_set_count_box else R.drawable.history_set_count_box_loser,
+            )
+            setPadding(4.dp(), 0, 4.dp(), 0)
+            layoutParams = TableRow.LayoutParams(setBoxSize, setBoxSize).also { it.marginEnd = 10.dp() }
+        }
+
         listOf(
             Quadruple(1, state.player1Name, state.sets1, state.setResults.map { it.first }),
             Quadruple(2, state.player2Name, state.sets2, state.setResults.map { it.second }),
         ).forEach { (player, name, sets, _) ->
             val isWinner = player == state.matchWinner
             val nameColor = if (isWinner) winnerColor else whiteColor
-            val setCountColor = if (isWinner) winnerColor else loserColor
             table.addView(TableRow(this).apply {
-                addView(cell(name, 12f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 68, marginEnd = 8))
-                addView(cell(sets.toString(), 16f, Gravity.CENTER, setCountColor, bold = false, minW = 22, marginEnd = 10))
+                addView(cell(name, 15f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 68, marginEnd = 8))
+                addView(setCountCell(sets.toString(), isWinner))
                 state.setResults.forEach { setResult ->
                     val playerScore = if (player == 1) setResult.first else setResult.second
                     val wonThisSet = if (player == 1) setResult.first > setResult.second else setResult.second > setResult.first
                     val scoreColor = if (wonThisSet) winnerColor else whiteColor
-                    addView(cell(playerScore.toString(), 12f, Gravity.CENTER, scoreColor, minW = 18, marginEnd = 4))
+                    addView(cell(playerScore.toString(), 15f, Gravity.CENTER, scoreColor, minW = 18, marginEnd = 4))
                 }
             })
         }
@@ -370,12 +384,27 @@ class MainActivity : AppCompatActivity() {
             val rightScore = binding.tvScore2
             val net = binding.divider
 
-            val horizontalTravel = rightScore.x - leftScore.x
+            val dividerCenterX = net.x + (net.width / 2f)
+            val leftScoreCenterX = leftScore.x + (leftScore.width / 2f)
+            val rightScoreCenterX = rightScore.x + (rightScore.width / 2f)
+            val halfTravel = minOf(
+                dividerCenterX - leftScoreCenterX,
+                rightScoreCenterX - dividerCenterX,
+            ) * 0.68f
+            if (halfTravel <= 0f) return@post
+
+            val leftCenterX = dividerCenterX - halfTravel
+            val rightCenterX = dividerCenterX + halfTravel
+            val leftX = leftCenterX - (ball.width / 2f)
+            val rightX = rightCenterX - (ball.width / 2f)
+            val horizontalTravel = rightX - leftX
             if (horizontalTravel <= 0f) return@post
 
-            val leftX = leftScore.x + (leftScore.width * 0.68f)
-            val rightX = rightScore.x + (rightScore.width * 0.18f)
-            val baseY = (leftScore.y + (leftScore.height * 0.58f)) - (ball.height / 2f)
+            val baseCenterY = (
+                (leftScore.y + (leftScore.height * 0.58f)) +
+                    (rightScore.y + (rightScore.height * 0.58f))
+                ) / 2f
+            val baseY = baseCenterY - (ball.height / 2f)
             val netTopY = net.y + (net.height * 0.20f)
             val desiredArc = abs(rightX - leftX) * 0.20f
             val minArcToClearNet = (baseY - netTopY) + ball.height
