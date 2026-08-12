@@ -47,6 +47,10 @@
     <string name="notice_done">Done</string>
     <string name="splash_tap_to_continue">Tap to continue</string>
     <string name="cd_startup_image">Startup image</string>
+    <string name="tournament_name_default">Tournament Name</string>
+    <string name="tournament_name_hint">Enter tournament name</string>
+    <string name="dialog_edit_tournament_name">Edit tournament name</string>
+    <string name="cd_tournament_name">Tournament name, long press to edit</string>
 
     <!-- History screen -->
     <string name="btn_history">History</string>
@@ -57,6 +61,8 @@
     <string name="history_confirm_delete">Delete this result?</string>
     <string name="history_confirm_clear_all">Delete all match results?</string>
     <string name="history_winner_label">🏆 %1$s  (%2$s vs %3$s)</string>
-    <string name="history_players">%1$s vs %2$s</string>
+    <string name="history_winner_only">🏆 %1$s</string>
+    <string name="history_players">(%1$s vs %2$s)</string>
+    <string name="history_tournament_label">Tournament: %1$s</string>
     <string name="history_set_score">%1$d – %2$d</string>
 </resources>

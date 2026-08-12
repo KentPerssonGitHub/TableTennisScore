@@ -13,4 +13,5 @@
     <color name="background_paused">#2E1F22</color>
     <color name="summary_winner_text">#3E5F95</color>
     <color name="summary_loser_text">#5A5F68</color>
+    <color name="history_loser_text">#7A808A</color>
 </resources>

@@ -183,7 +183,7 @@
         android:clickable="true"
         android:focusable="true"
         app:layout_constraintTop_toTopOf="@id/tvScore1"
-        app:layout_constraintBottom_toBottomOf="@id/tvScore1"
+        app:layout_constraintBottom_toTopOf="@id/tvTournamentName"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -205,15 +205,6 @@
             android:text="@string/btn_setup_match"
             android:textSize="14sp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnEditScore"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/btn_edit_score"
-            android:textSize="14sp"
-            android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnHistory"
@@ -243,13 +234,13 @@
         style="@style/Widget.Material3.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
+        android:layout_marginBottom="8dp"
         android:text="@string/btn_pause_match"
         android:textSize="16sp"
         android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent" />
+        app:layout_constraintBottom_toTopOf="@id/tvTournamentName" />
 
     <TextClock
         android:id="@+id/tvClock"
@@ -332,4 +323,26 @@
             android:textSize="10sp" />
 
     </LinearLayout>
+
+    <!-- Tournament name at the bottom center; long press to edit -->
+    <TextView
+        android:id="@+id/tvTournamentName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/tournament_name_default"
+        android:textColor="@color/player_name"
+        android:textSize="16sp"
+        android:alpha="0.55"
+        android:gravity="center"
+        android:padding="8dp"
+        android:layout_marginBottom="6dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="false"
+        android:longClickable="true"
+        android:focusable="true"
+        android:contentDescription="@string/cd_tournament_name"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "match_results")
 data class MatchResult(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val tournamentName: String,
     val player1Name: String,
     val player2Name: String,
     val sets1: Int,

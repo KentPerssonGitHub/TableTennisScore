@@ -4,8 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
-    app:cardBackgroundColor="#1A1A2E"
+    android:layout_marginBottom="14dp"
+    app:cardBackgroundColor="#2A2A44"
     app:cardCornerRadius="8dp"
     app:cardElevation="2dp">
 
@@ -45,42 +45,22 @@
 
         </LinearLayout>
 
-        <!-- Players and set score -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="4dp">
-
-            <TextView
-                android:id="@+id/tvItemPlayers"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textColor="@color/score_text"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/tvItemSets"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/summary_winner_text"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginStart="12dp" />
-
-        </LinearLayout>
-
-        <!-- Per-set scores -->
         <TextView
-            android:id="@+id/tvItemSetScores"
+            android:id="@+id/tvItemTournament"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:alpha="0.7"
-            android:textColor="@color/score_text"
-            android:textSize="12sp" />
+            android:alpha="0.75"
+            android:textColor="@color/player_name"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/layoutItemScoreGrid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="vertical" />
 
         <!-- Duration -->
         <TextView

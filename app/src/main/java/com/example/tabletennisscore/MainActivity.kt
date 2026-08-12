@@ -28,6 +28,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.tabletennisscore.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
@@ -59,9 +62,23 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        hideSystemBars()
 
         setupClickListeners()
         observeState()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     private fun setupClickListeners() {
@@ -84,12 +101,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnSetupMatch.setOnClickListener { confirmSetupMatch() }
-        binding.btnEditScore.setOnClickListener { showEditScoreDialog() }
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndo.setOnClickListener { viewModel.undo() }
         binding.btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
+        }
+        binding.tvTournamentName.setOnLongClickListener {
+            showEditTournamentNameDialog()
+            true
         }
         binding.ivSwapSides.setOnLongClickListener {
             viewModel.swapSides()
@@ -149,6 +169,11 @@ class MainActivity : AppCompatActivity() {
             updateMatchTimerText()
             updateMatchSummaryPanel(state)
 
+            // Tournament name
+            val tName = state.tournamentName
+            binding.tvTournamentName.text = if (tName.isBlank()) getString(R.string.tournament_name_default) else tName
+            binding.tvTournamentName.alpha = if (tName.isBlank()) 0.35f else 0.70f
+
             if (state.decidingSetSwapNoticeVersion > lastShownDecidingSwapNoticeVersion) {
                 lastShownDecidingSwapNoticeVersion = state.decidingSetSwapNoticeVersion
                 decidingSwapSnackbar?.dismiss()
@@ -190,18 +215,18 @@ class MainActivity : AppCompatActivity() {
                 binding.btnPauseMatch.visibility = View.VISIBLE
                 binding.btnStartMatch.visibility = View.GONE
                 binding.btnSetupMatch.visibility = View.GONE
-                binding.btnEditScore.visibility = View.GONE
                 binding.ivSwapSides.visibility = View.GONE
                 binding.btnUndo.visibility = View.VISIBLE
+                binding.btnHistory.visibility = View.GONE
                 startRallyBallAnimationIfNeeded()
                 startMatchTimerTickerIfNeeded()
             } else {
                 binding.btnPauseMatch.visibility = View.GONE
                 binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
-                binding.btnEditScore.visibility = if (state.hasMatchStarted && !isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 binding.btnUndo.visibility = if (state.hasMatchStarted && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+                binding.btnHistory.visibility = View.VISIBLE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()
             }
@@ -395,8 +420,38 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun showEditNameDialog(player: Int) {
-        val state = viewModel.state.value ?: return
+    private fun showEditTournamentNameDialog() {
+        val currentName = viewModel.state.value?.tournamentName ?: ""
+        val editText = EditText(this).apply {
+            setText(currentName)
+            if (currentName.isNotBlank()) selectAll()
+            hint = getString(R.string.tournament_name_hint)
+            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_TOURNAMENT_NAME_LENGTH))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            maxLines = 1
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_edit_tournament_name)
+            .setView(editText)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                viewModel.setTournamentName(editText.text.toString())
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            editText.setOnEditorActionListener { _, actionId, event ->
+                val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
+                if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                    okButton.performClick(); true
+                } else false
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showEditNameDialog(player: Int) {        val state = viewModel.state.value ?: return
         val currentName = if (player == 1) state.player1Name else state.player2Name
         val defaultName = if (player == 1) getString(R.string.player1_default) else getString(R.string.player2_default)
         val isDefaultName = currentName == defaultName
@@ -408,6 +463,7 @@ class MainActivity : AppCompatActivity() {
             }
             hint = getString(R.string.dialog_hint_name)
             filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             imeOptions = EditorInfo.IME_ACTION_DONE
             maxLines = 1
         }

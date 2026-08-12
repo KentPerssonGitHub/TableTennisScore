@@ -9,8 +9,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.tabletennisscore.data.MatchDatabase
 import com.example.tabletennisscore.data.MatchResult
 import kotlinx.coroutines.launch
-import java.util.Locale
-
 /**
  * Holds all game state and enforces table tennis scoring rules.
  *
@@ -26,6 +24,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         const val MAX_PLAYER_NAME_LENGTH = 13
+        const val MAX_TOURNAMENT_NAME_LENGTH = 40
     }
 
     data class GameState(
@@ -46,6 +45,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val decidingSetSwapNoticeVersion: Int = 0,
         val awaitingDecidingSetSwapConfirmation: Boolean = false,
         val resumeAfterDecidingSetSwapConfirmation: Boolean = false,
+        val tournamentName: String = "",
     )
 
     private val _state = MutableLiveData(GameState())
@@ -133,6 +133,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 isMatchRunning = false
                 captureElapsedUntilNow()
                 saveMatchResult(
+                    tournamentName = s.tournamentName,
                     player1Name = s.player1Name,
                     player2Name = s.player2Name,
                     sets1 = sets1,
@@ -257,6 +258,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val newSidesSwapped = if (matchWinner != null) current.sidesSwapped else !current.sidesSwapped
             if (matchWinner != null) {
                 saveMatchResult(
+                    tournamentName = current.tournamentName,
                     player1Name = current.player1Name,
                     player2Name = current.player2Name,
                     sets1 = finalSets1,
@@ -335,21 +337,27 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                        else current.copy(player2Name = trimmed)
     }
 
+    fun setTournamentName(name: String) {
+        _state.value = current.copy(tournamentName = sanitizeTournamentName(name))
+    }
+
     private fun sanitizePlayerName(name: String, fallback: String): String {
-        return name
-            .trim()
-            .split(Regex("\\s+"))
-            .joinToString(" ") { word ->
-                word.lowercase(Locale.getDefault()).replaceFirstChar { first ->
-                    if (first.isLowerCase()) first.titlecase(Locale.getDefault()) else first.toString()
-                }
-            }
+        return normalizeNameInput(name)
             .take(MAX_PLAYER_NAME_LENGTH)
             .ifEmpty { fallback }
     }
 
+    private fun sanitizeTournamentName(name: String): String {
+        return normalizeNameInput(name).take(MAX_TOURNAMENT_NAME_LENGTH)
+    }
+
+    private fun normalizeNameInput(value: String): String {
+        return value.trim().replace(Regex("\\s+"), " ")
+    }
+
     /** Persists the finished match to the database. Call after [captureElapsedUntilNow]. */
     private fun saveMatchResult(
+        tournamentName: String,
         player1Name: String,
         player2Name: String,
         sets1: Int,
@@ -363,6 +371,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             dao.insert(
                 MatchResult(
+                    tournamentName = sanitizeTournamentName(tournamentName),
                     player1Name = player1Name,
                     player2Name = player2Name,
                     sets1 = sets1,

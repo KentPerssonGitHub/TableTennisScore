@@ -1,12 +1,20 @@
 package com.example.tabletennisscore
 
 import android.os.Bundle
+import android.graphics.Typeface
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -41,27 +49,31 @@ class HistoryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        hideSystemBars()
 
         binding.rvHistory.layoutManager = LinearLayoutManager(this)
         binding.rvHistory.adapter = adapter
 
         binding.btnHistoryBack.setOnClickListener { finish() }
-        binding.btnClearHistory.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setMessage(getString(R.string.history_confirm_clear_all))
-                .setPositiveButton(R.string.dialog_ok) { _, _ ->
-                    lifecycleScope.launch { dao.deleteAll() }
-                }
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show()
-        }
 
         lifecycleScope.launch {
             dao.getAll().collectLatest { results ->
                 adapter.submitList(results)
                 binding.tvHistoryEmpty.visibility = if (results.isEmpty()) View.VISIBLE else View.GONE
-                binding.btnClearHistory.visibility = if (results.isEmpty()) View.GONE else View.VISIBLE
             }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 
@@ -81,46 +93,175 @@ class HistoryActivity : AppCompatActivity() {
             holder.bind(getItem(position), onDelete)
 
         class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            private val tvPlayers: TextView = view.findViewById(R.id.tvItemPlayers)
-            private val tvSets: TextView = view.findViewById(R.id.tvItemSets)
-            private val tvSetScores: TextView = view.findViewById(R.id.tvItemSetScores)
+            private val scoreGrid: LinearLayout = view.findViewById(R.id.layoutItemScoreGrid)
             private val tvDuration: TextView = view.findViewById(R.id.tvItemDuration)
             private val tvDate: TextView = view.findViewById(R.id.tvItemDate)
+            private val tvTournament: TextView = view.findViewById(R.id.tvItemTournament)
             private val btnDelete: View = view.findViewById(R.id.btnItemDelete)
 
             private val dateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
+            private val density = view.resources.displayMetrics.density
 
             fun bind(result: MatchResult, onDelete: (MatchResult) -> Unit) {
                 val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
+                val loserName = if (result.winner == 1) result.player2Name else result.player1Name
+                val setResults = parseSetResults(result.setResultsJson)
 
-                tvPlayers.text = itemView.context.getString(
-                    R.string.history_players,
-                    result.player1Name,
-                    result.player2Name,
-                )
-                tvSets.text = itemView.context.getString(
-                    R.string.history_set_score,
-                    result.sets1,
-                    result.sets2,
-                )
-                tvSetScores.text = buildSetScoresLine(result)
+                renderScoreGrid(result, winnerName, loserName, setResults)
                 tvDuration.text = formatDuration(result.durationMs)
                 tvDate.text = dateFormat.format(Date(result.playedAt))
-                tvPlayers.text = itemView.context.getString(
-                    R.string.history_winner_label,
-                    winnerName,
-                    result.player1Name,
-                    result.player2Name,
+                tvTournament.text = itemView.context.getString(
+                    R.string.history_tournament_label,
+                    result.tournamentName,
                 )
+                tvTournament.visibility = if (result.tournamentName.isBlank()) View.GONE else View.VISIBLE
                 btnDelete.setOnClickListener { onDelete(result) }
             }
 
-            private fun buildSetScoresLine(result: MatchResult): String {
-                if (result.setResultsJson.isBlank()) return ""
-                return result.setResultsJson
-                    .split(",")
-                    .joinToString("  ") { it.replace("-", "–") }
+            private fun renderScoreGrid(
+                result: MatchResult,
+                winnerName: String,
+                loserName: String,
+                setResults: List<Pair<Int, Int>>,
+            ) {
+                scoreGrid.removeAllViews()
+                if (setResults.isEmpty()) {
+                    scoreGrid.visibility = View.GONE
+                    return
+                }
+                scoreGrid.visibility = View.VISIBLE
+
+                val winnerScores = setResults.map { if (result.winner == 1) it.first else it.second }
+                val loserScores = setResults.map { if (result.winner == 1) it.second else it.first }
+
+                scoreGrid.addView(
+                    createScoreRow(
+                        name = winnerName,
+                        nameColor = ContextCompat.getColor(itemView.context, R.color.score_text),
+                        nameBold = true,
+                        setCount = if (result.winner == 1) result.sets1 else result.sets2,
+                        setCountColor = ContextCompat.getColor(itemView.context, R.color.score_text),
+                        playerScores = winnerScores,
+                        opponentScores = loserScores,
+                        isMatchWinnerRow = true,
+                    ),
+                )
+                scoreGrid.addView(
+                    createScoreRow(
+                        name = loserName,
+                        nameColor = ContextCompat.getColor(itemView.context, R.color.player_name),
+                        nameBold = false,
+                        setCount = if (result.winner == 1) result.sets2 else result.sets1,
+                        setCountColor = ContextCompat.getColor(itemView.context, R.color.history_loser_text),
+                        playerScores = loserScores,
+                        opponentScores = winnerScores,
+                        isMatchWinnerRow = false,
+                    ),
+                )
             }
+
+            private fun createScoreRow(
+                name: String,
+                nameColor: Int,
+                nameBold: Boolean,
+                setCount: Int,
+                setCountColor: Int,
+                playerScores: List<Int>,
+                opponentScores: List<Int>,
+                isMatchWinnerRow: Boolean,
+            ): LinearLayout {
+                return LinearLayout(itemView.context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        if (!isMatchWinnerRow) topMargin = 2.dp()
+                    }
+
+                    addView(createNameCell(name, nameColor, nameBold))
+                    addView(createSetCountCell(setCount.toString(), setCountColor))
+                    addView(createSeparatorCell())
+                    playerScores.forEachIndexed { index, score ->
+                        val otherScore = opponentScores.getOrElse(index) { 0 }
+                        val isWinningGame = score > otherScore
+                        val scoreColor = when {
+                            isWinningGame && isMatchWinnerRow -> ContextCompat.getColor(itemView.context, R.color.score_text)
+                            isWinningGame -> ContextCompat.getColor(itemView.context, R.color.score_text)
+                            else -> ContextCompat.getColor(itemView.context, R.color.history_loser_text)
+                        }
+                        val scoreSizeSp = when {
+                            isWinningGame && isMatchWinnerRow -> 16f
+                            else -> 14f
+                        }
+                        addView(createScoreCell(score.toString(), scoreColor, scoreSizeSp))
+                    }
+                }
+            }
+
+            private fun createNameCell(name: String, color: Int, bold: Boolean): TextView {
+                return TextView(itemView.context).apply {
+                    text = name
+                    setTextColor(color)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    maxLines = 1
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    if (bold) setTypeface(typeface, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2.6f).apply {
+                        marginEnd = 10.dp()
+                    }
+                }
+            }
+
+            private fun createSetCountCell(text: String, color: Int): TextView {
+                return TextView(itemView.context).apply {
+                    this.text = text
+                    setTextColor(color)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                    gravity = Gravity.CENTER
+                    setTypeface(typeface, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f).apply {
+                        marginEnd = 8.dp()
+                    }
+                }
+            }
+
+            private fun createSeparatorCell(): TextView {
+                return TextView(itemView.context).apply {
+                    text = "|"
+                    setTextColor(ContextCompat.getColor(itemView.context, R.color.history_loser_text))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    gravity = Gravity.CENTER
+                    setTypeface(typeface, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.45f).apply {
+                        marginEnd = 6.dp()
+                    }
+                }
+            }
+
+            private fun createScoreCell(text: String, color: Int, sizeSp: Float): TextView {
+                return TextView(itemView.context).apply {
+                    this.text = text
+                    setTextColor(color)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+                    gravity = Gravity.CENTER
+                    setTypeface(typeface, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+            }
+
+            private fun parseSetResults(setResultsJson: String): List<Pair<Int, Int>> {
+                if (setResultsJson.isBlank()) return emptyList()
+                return setResultsJson.split(",").mapNotNull { token ->
+                    val parts = token.trim().split("-")
+                    val first = parts.getOrNull(0)?.trim()?.toIntOrNull()
+                    val second = parts.getOrNull(1)?.trim()?.toIntOrNull()
+                    if (first != null && second != null) first to second else null
+                }
+            }
+
+            private fun Int.dp(): Int = (this * density).toInt()
 
             private fun formatDuration(ms: Long): String {
                 val totalSecs = ms / 1000
