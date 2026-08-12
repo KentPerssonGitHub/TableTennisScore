@@ -1,6 +1,7 @@
 package com.example.tabletennisscore
 
 import android.animation.ValueAnimator
+import android.content.Intent
 import android.os.Handler
 import android.text.InputFilter
 import android.text.InputType
@@ -87,6 +88,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndo.setOnClickListener { viewModel.undo() }
+        binding.btnHistory.setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
         binding.ivSwapSides.setOnLongClickListener {
             viewModel.swapSides()
             true

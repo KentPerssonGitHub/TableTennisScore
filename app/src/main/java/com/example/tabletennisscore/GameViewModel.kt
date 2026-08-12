@@ -1,9 +1,14 @@
 package com.example.tabletennisscore
 
+import android.app.Application
 import android.os.SystemClock
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.tabletennisscore.data.MatchDatabase
+import com.example.tabletennisscore.data.MatchResult
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -15,7 +20,9 @@ import java.util.Locale
  * - The player who did NOT serve first in the previous set serves first in the next set.
  * - The first server of the match is decided externally (defaults to player 1).
  */
-class GameViewModel : ViewModel() {
+class GameViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val dao = MatchDatabase.getInstance(application).matchResultDao()
 
     companion object {
         const val MAX_PLAYER_NAME_LENGTH = 13
@@ -125,6 +132,15 @@ class GameViewModel : ViewModel() {
                 matchWinner = player
                 isMatchRunning = false
                 captureElapsedUntilNow()
+                saveMatchResult(
+                    player1Name = s.player1Name,
+                    player2Name = s.player2Name,
+                    sets1 = sets1,
+                    sets2 = sets2,
+                    winner = player,
+                    bestOfSets = s.bestOfSets,
+                    setResults = setResults,
+                )
                 // Match over — do NOT swap sides
             } else {
                 sidesSwapped = !sidesSwapped // players switch ends after each set
@@ -239,6 +255,17 @@ class GameViewModel : ViewModel() {
             val matchWinner = if (isMatchWon(finalSets1, finalSets2, current.bestOfSets)) setWinner else null
             // Only swap sides if the match is not over
             val newSidesSwapped = if (matchWinner != null) current.sidesSwapped else !current.sidesSwapped
+            if (matchWinner != null) {
+                saveMatchResult(
+                    player1Name = current.player1Name,
+                    player2Name = current.player2Name,
+                    sets1 = finalSets1,
+                    sets2 = finalSets2,
+                    winner = matchWinner,
+                    bestOfSets = current.bestOfSets,
+                    setResults = finalSetResults,
+                )
+            }
             _state.value = current.copy(
                 score1 = 0,
                 score2 = 0,
@@ -319,6 +346,34 @@ class GameViewModel : ViewModel() {
             }
             .take(MAX_PLAYER_NAME_LENGTH)
             .ifEmpty { fallback }
+    }
+
+    /** Persists the finished match to the database. Call after [captureElapsedUntilNow]. */
+    private fun saveMatchResult(
+        player1Name: String,
+        player2Name: String,
+        sets1: Int,
+        sets2: Int,
+        winner: Int,
+        bestOfSets: Int,
+        setResults: List<Pair<Int, Int>>,
+    ) {
+        val durationMs = elapsedPlayedMs
+        val setResultsJson = setResults.joinToString(",") { "${it.first}-${it.second}" }
+        viewModelScope.launch {
+            dao.insert(
+                MatchResult(
+                    player1Name = player1Name,
+                    player2Name = player2Name,
+                    sets1 = sets1,
+                    sets2 = sets2,
+                    winner = winner,
+                    bestOfSets = bestOfSets,
+                    durationMs = durationMs,
+                    setResultsJson = setResultsJson,
+                )
+            )
+        }
     }
 
     private fun pushHistory() {

@@ -47,4 +47,16 @@
     <string name="notice_done">Done</string>
     <string name="splash_tap_to_continue">Tap to continue</string>
     <string name="cd_startup_image">Startup image</string>
+
+    <!-- History screen -->
+    <string name="btn_history">History</string>
+    <string name="history_title">Match History</string>
+    <string name="history_back">← Back</string>
+    <string name="history_empty">No matches recorded yet.</string>
+    <string name="history_clear_all">Clear All</string>
+    <string name="history_confirm_delete">Delete this result?</string>
+    <string name="history_confirm_clear_all">Delete all match results?</string>
+    <string name="history_winner_label">🏆 %1$s  (%2$s vs %3$s)</string>
+    <string name="history_players">%1$s vs %2$s</string>
+    <string name="history_set_score">%1$d – %2$d</string>
 </resources>
