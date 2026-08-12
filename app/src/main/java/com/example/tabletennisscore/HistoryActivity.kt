@@ -141,6 +141,7 @@ class HistoryActivity : AppCompatActivity() {
                         nameBold = true,
                         setCount = if (result.winner == 1) result.sets1 else result.sets2,
                         setCountColor = ContextCompat.getColor(itemView.context, R.color.score_text),
+                        setCountBackgroundRes = R.drawable.history_set_count_box,
                         playerScores = winnerScores,
                         opponentScores = loserScores,
                         isMatchWinnerRow = true,
@@ -152,7 +153,8 @@ class HistoryActivity : AppCompatActivity() {
                         nameColor = ContextCompat.getColor(itemView.context, R.color.player_name),
                         nameBold = false,
                         setCount = if (result.winner == 1) result.sets2 else result.sets1,
-                        setCountColor = ContextCompat.getColor(itemView.context, R.color.history_loser_text),
+                        setCountColor = ContextCompat.getColor(itemView.context, R.color.score_text),
+                        setCountBackgroundRes = R.drawable.history_set_count_box_loser,
                         playerScores = loserScores,
                         opponentScores = winnerScores,
                         isMatchWinnerRow = false,
@@ -166,6 +168,7 @@ class HistoryActivity : AppCompatActivity() {
                 nameBold: Boolean,
                 setCount: Int,
                 setCountColor: Int,
+                setCountBackgroundRes: Int,
                 playerScores: List<Int>,
                 opponentScores: List<Int>,
                 isMatchWinnerRow: Boolean,
@@ -181,7 +184,7 @@ class HistoryActivity : AppCompatActivity() {
                     }
 
                     addView(createNameCell(name, nameColor, nameBold))
-                    addView(createSetCountCell(setCount.toString(), setCountColor))
+                    addView(createSetCountCell(setCount.toString(), setCountColor, setCountBackgroundRes))
                     addView(createSeparatorCell())
                     playerScores.forEachIndexed { index, score ->
                         val otherScore = opponentScores.getOrElse(index) { 0 }
@@ -214,14 +217,16 @@ class HistoryActivity : AppCompatActivity() {
                 }
             }
 
-            private fun createSetCountCell(text: String, color: Int): TextView {
+            private fun createSetCountCell(text: String, color: Int, backgroundRes: Int): TextView {
                 return TextView(itemView.context).apply {
                     this.text = text
                     setTextColor(color)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
                     gravity = Gravity.CENTER
                     setTypeface(typeface, Typeface.BOLD)
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f).apply {
+                    setBackgroundResource(backgroundRes)
+                    setPadding(4.dp(), 1.dp(), 4.dp(), 1.dp())
+                    layoutParams = LinearLayout.LayoutParams(30.dp(), 30.dp()).apply {
                         marginEnd = 8.dp()
                     }
                 }
