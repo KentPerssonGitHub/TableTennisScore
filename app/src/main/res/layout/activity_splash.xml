@@ -11,7 +11,7 @@
         android:layout_height="match_parent"
         android:contentDescription="@string/cd_startup_image"
         android:scaleType="centerCrop"
-        android:src="@drawable/oscarwithtrulsandkallberg" />
+        android:src="@drawable/oscarwin" />
 
     <LinearLayout
         android:id="@+id/layoutSplashTitle"
