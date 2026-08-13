@@ -196,8 +196,8 @@ class HistoryActivity : AppCompatActivity() {
                             else -> ContextCompat.getColor(itemView.context, R.color.history_loser_text)
                         }
                         val scoreSizeSp = when {
-                            isWinningGame && isMatchWinnerRow -> 16f
-                            else -> 14f
+                            isWinningGame && isMatchWinnerRow -> 18f
+                            else -> 16f
                         }
                         addView(createScoreCell(score.toString(), scoreColor, scoreSizeSp))
                     }
@@ -232,7 +232,7 @@ class HistoryActivity : AppCompatActivity() {
                     setBackgroundResource(backgroundRes)
                     setPadding(4.dp(), 0, 4.dp(), 0)
                     layoutParams = LinearLayout.LayoutParams(30.dp(), 30.dp()).apply {
-                        marginEnd = 8.dp()
+                        marginEnd = 18.dp()
                     }
                 }
             }
@@ -244,8 +244,11 @@ class HistoryActivity : AppCompatActivity() {
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                     gravity = Gravity.CENTER
                     setTypeface(typeface, Typeface.BOLD)
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.45f).apply {
-                        marginEnd = 6.dp()
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        marginEnd = 16.dp()
                     }
                 }
             }
@@ -255,9 +258,14 @@ class HistoryActivity : AppCompatActivity() {
                     this.text = text
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-                    gravity = Gravity.CENTER
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     setTypeface(typeface, Typeface.BOLD)
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        marginEnd = 16.dp()
+                    }
                 }
             }
 
