@@ -11,7 +11,7 @@
         android:layout_height="match_parent"
         android:contentDescription="@string/cd_startup_image"
         android:scaleType="centerCrop"
-        android:src="@drawable/oscarwin" />
+        android:src="@drawable/oscarwin2" />
 
     <LinearLayout
         android:id="@+id/layoutSplashTitle"
@@ -36,10 +36,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="24dp"
-        android:shadowColor="#B3000000"
+        android:shadowColor="#FF000000"
         android:shadowDx="0"
-        android:shadowDy="2"
-        android:shadowRadius="4"
+        android:shadowDy="6"
+        android:shadowRadius="12"
         android:textSize="24sp"
         android:text="@string/splash_tap_to_continue"
         android:textAppearance="@style/TextAppearance.MaterialComponents.Body1"
