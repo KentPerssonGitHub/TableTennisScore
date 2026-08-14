@@ -225,7 +225,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
                 binding.btnSetupMatch.visibility = View.VISIBLE
                 binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
-                binding.btnUndo.visibility = if (state.hasMatchStarted && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+                binding.btnUndo.visibility = View.GONE
                 binding.btnHistory.visibility = View.VISIBLE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()

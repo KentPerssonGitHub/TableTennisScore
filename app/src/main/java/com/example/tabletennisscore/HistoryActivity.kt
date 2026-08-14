@@ -139,7 +139,7 @@ class HistoryActivity : AppCompatActivity() {
                     createScoreRow(
                         name = winnerName,
                         nameColor = ContextCompat.getColor(itemView.context, R.color.score_text),
-                        nameBold = true,
+                        nameBold = false,
                         setCount = if (result.winner == 1) result.sets1 else result.sets2,
                         setCountColor = ContextCompat.getColor(itemView.context, R.color.score_text),
                         setCountBackgroundRes = R.drawable.history_set_count_box,
@@ -197,7 +197,7 @@ class HistoryActivity : AppCompatActivity() {
                         }
                         val scoreSizeSp = when {
                             isWinningGame && isMatchWinnerRow -> 18f
-                            else -> 16f
+                            else -> 18f
                         }
                         addView(createScoreCell(score.toString(), scoreColor, scoreSizeSp))
                     }
@@ -208,11 +208,11 @@ class HistoryActivity : AppCompatActivity() {
                 return TextView(itemView.context).apply {
                     text = name
                     setTextColor(color)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    if (bold) setTypeface(typeface, Typeface.BOLD)
+                    if (bold) setTypeface(typeface, Typeface.NORMAL)
                     // Fixed width keeps the set-count box aligned across 1/3/5/7 set variants.
                     layoutParams = LinearLayout.LayoutParams(130.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                         marginEnd = 10.dp()
@@ -259,7 +259,7 @@ class HistoryActivity : AppCompatActivity() {
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    setTypeface(typeface, Typeface.BOLD)
+                    setTypeface(typeface, Typeface.NORMAL)
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,

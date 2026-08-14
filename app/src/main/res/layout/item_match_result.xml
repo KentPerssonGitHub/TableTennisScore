@@ -50,9 +50,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:alpha="0.75"
+            android:alpha="0.95"
             android:textColor="@color/player_name"
-            android:textSize="12sp"
+            android:textSize="15sp"
             android:visibility="gone" />
 
         <LinearLayout
