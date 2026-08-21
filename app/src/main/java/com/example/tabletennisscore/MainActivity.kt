@@ -2,6 +2,7 @@ package com.example.tabletennisscore
 
 import android.animation.ValueAnimator
 import android.content.Intent
+import android.graphics.Color
 import android.os.Handler
 import android.text.InputFilter
 import android.text.InputType
@@ -286,27 +287,30 @@ class MainActivity : AppCompatActivity() {
             R.string.match_summary_time,
             formatElapsedTime(viewModel.getElapsedPlayedMs()),
         )
+        binding.matchSummaryPanel.setBackgroundColor(Color.parseColor("#CC220000"))
 
         // Position panel on the winning player's displayed side of the screen
         val winnerOnLeft = (state.matchWinner == 1) != state.sidesSwapped
+        // Position panel in the center of the screen
         val margin = (12 * resources.displayMetrics.density).toInt()
         ConstraintSet().apply {
             clone(binding.rootLayout)
+
+            // Rensa gamla horisontella begränsningar
             clear(R.id.matchSummaryPanel, ConstraintSet.START)
             clear(R.id.matchSummaryPanel, ConstraintSet.END)
-            if (winnerOnLeft) {
-                // Left-aligned, fills up to 75% of left half
-                constrainWidth(R.id.matchSummaryPanel, 0)
-                connect(R.id.matchSummaryPanel, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin)
-                connect(R.id.matchSummaryPanel, ConstraintSet.END, R.id.guidelineP1SummaryEnd, ConstraintSet.START, 0)
-            } else {
-                // Starts at center divider, exactly 75% of the right half wide
-                constrainWidth(R.id.matchSummaryPanel, 0)
-                constrainDefaultWidth(R.id.matchSummaryPanel, ConstraintSet.MATCH_CONSTRAINT_SPREAD)
-                connect(R.id.matchSummaryPanel, ConstraintSet.START, R.id.divider, ConstraintSet.END, margin)
-                connect(R.id.matchSummaryPanel, ConstraintSet.END, R.id.guidelineP2SummaryEnd, ConstraintSet.START, 0)
-            }
+
+            // Centrera horisontellt mot föräldralayouten (Parent)
+            constrainWidth(R.id.matchSummaryPanel, ConstraintSet.WRAP_CONTENT)
+            connect(R.id.matchSummaryPanel, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin)
+            connect(R.id.matchSummaryPanel, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin)
+
+            // Centrera vertikalt mot föräldralayouten (Parent)
+            clear(R.id.matchSummaryPanel, ConstraintSet.TOP)
+            clear(R.id.matchSummaryPanel, ConstraintSet.BOTTOM)
+            connect(R.id.matchSummaryPanel, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP, margin)
             connect(R.id.matchSummaryPanel, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, margin)
+
             applyTo(binding.rootLayout)
         }
     }
@@ -318,8 +322,11 @@ class MainActivity : AppCompatActivity() {
         val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
         val whiteColor = ContextCompat.getColor(this, android.R.color.white)
         fun Int.dp() = (this * density).toInt()
-        val setBoxSize = 24.dp()
 
+        // Ökad storlek på fyrkanten för set-vinster (från 24dp till 34dp)
+        val setBoxSize = 34.dp()
+
+        // Höjda textstorlekar (från 15f till 20f) och bredder (minW)
         fun cell(text: String, textSizeSp: Float, grav: Int, textColor: Int, bold: Boolean = false, minW: Int = 0, marginEnd: Int = 0) =
             TextView(this).apply {
                 this.text = text
@@ -332,9 +339,10 @@ class MainActivity : AppCompatActivity() {
                     .also { if (marginEnd > 0) it.marginEnd = marginEnd.dp() }
             }
 
+        // Höjd storlek för siffran inuti boxen (från 16f till 20f)
         fun setCountCell(text: String, winnerRow: Boolean) = TextView(this).apply {
             this.text = text
-            textSize = 16f
+            textSize = 20f
             gravity = Gravity.CENTER
             setTextColor(whiteColor)
             includeFontPadding = false
@@ -343,8 +351,8 @@ class MainActivity : AppCompatActivity() {
             setBackgroundResource(
                 if (winnerRow) R.drawable.history_set_count_box else R.drawable.history_set_count_box_loser,
             )
-            setPadding(4.dp(), 0, 4.dp(), 0)
-            layoutParams = TableRow.LayoutParams(setBoxSize, setBoxSize).also { it.marginEnd = 10.dp() }
+            setPadding(6.dp(), 0, 6.dp(), 0)
+            layoutParams = TableRow.LayoutParams(setBoxSize, setBoxSize).also { it.marginEnd = 14.dp() }
         }
 
         listOf(
@@ -354,13 +362,15 @@ class MainActivity : AppCompatActivity() {
             val isWinner = player == state.matchWinner
             val nameColor = if (isWinner) winnerColor else whiteColor
             table.addView(TableRow(this).apply {
-                addView(cell(name, 15f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 68, marginEnd = 8))
+                // Ökat minW för namnet till 100dp och text till 20f
+                addView(cell(name, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = isWinner, minW = 100, marginEnd = 12))
                 addView(setCountCell(sets.toString(), isWinner))
                 state.setResults.forEach { setResult ->
                     val playerScore = if (player == 1) setResult.first else setResult.second
                     val wonThisSet = if (player == 1) setResult.first > setResult.second else setResult.second > setResult.first
                     val scoreColor = if (wonThisSet) winnerColor else whiteColor
-                    addView(cell(playerScore.toString(), 15f, Gravity.CENTER, scoreColor, minW = 18, marginEnd = 4))
+                    // Ökat text till 20f och minW till 24dp för set-resultaten
+                    addView(cell(playerScore.toString(), 20f, Gravity.CENTER, scoreColor, bold = wonThisSet, minW = 24, marginEnd = 8))
                 }
             })
         }
