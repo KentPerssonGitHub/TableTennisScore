@@ -313,6 +313,23 @@ class MainActivity : AppCompatActivity() {
 
             applyTo(binding.rootLayout)
         }
+
+        // Skapa en gemensam stängningsfunktion
+        val closeBox = {
+            binding.matchSummaryPanel.visibility = View.GONE
+            binding.tvMatchTimer.visibility = View.VISIBLE
+
+            // Rensa lyssnarna så de inte ligger aktiva under spelets gång
+            binding.rootLayout.setOnClickListener(null)
+            binding.matchSummaryPanel.setOnClickListener(null)
+        }
+
+        // Tvinga layouten att bli klickbar (viktigt om den saknar bakgrund)
+        binding.rootLayout.isClickable = true
+
+        // Stäng oavsett om man klickar på bakgrunden eller på själva rutan
+        binding.rootLayout.setOnClickListener { closeBox() }
+        binding.matchSummaryPanel.setOnClickListener { closeBox() }
     }
 
     private fun renderMatchSummaryScoreTable(state: GameViewModel.GameState) {
@@ -363,7 +380,7 @@ class MainActivity : AppCompatActivity() {
             val nameColor = if (isWinner) winnerColor else whiteColor
             table.addView(TableRow(this).apply {
                 // Ökat minW för namnet till 100dp och text till 20f
-                addView(cell(name, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = isWinner, minW = 100, marginEnd = 12))
+                addView(cell(name, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 100, marginEnd = 12))
                 addView(setCountCell(sets.toString(), isWinner))
                 state.setResults.forEach { setResult ->
                     val playerScore = if (player == 1) setResult.first else setResult.second
