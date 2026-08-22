@@ -275,11 +275,12 @@ class MainActivity : AppCompatActivity() {
             binding.tvMatchTimer.visibility = View.VISIBLE
             return
         }
-
+        // tvMatchSummaryWinner should have bigger margin at start and end, and the text should be bigger.
         val winnerName = if (state.matchWinner == 1) state.player1Name else state.player2Name
         val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
         binding.matchSummaryPanel.visibility = View.VISIBLE
         binding.tvMatchTimer.visibility = View.GONE
+        // make winner text in center if dialog
         binding.tvMatchSummaryWinner.text = getString(R.string.match_summary_winner, winnerName)
         binding.tvMatchSummaryWinner.setTextColor(winnerColor)
         renderMatchSummaryScoreTable(state)
@@ -344,7 +345,16 @@ class MainActivity : AppCompatActivity() {
         val setBoxSize = 34.dp()
 
         // Höjda textstorlekar (från 15f till 20f) och bredder (minW)
-        fun cell(text: String, textSizeSp: Float, grav: Int, textColor: Int, bold: Boolean = false, minW: Int = 0, marginEnd: Int = 0) =
+        fun cell(
+            text: String,
+            textSizeSp: Float,
+            grav: Int,
+            textColor: Int,
+            bold: Boolean = false,
+            minW: Int = 0,
+            marginStart: Int = 0,
+            marginEnd: Int = 0,
+        ) =
             TextView(this).apply {
                 this.text = text
                 textSize = textSizeSp
@@ -353,13 +363,16 @@ class MainActivity : AppCompatActivity() {
                 if (bold) setTypeface(typeface, Typeface.BOLD)
                 if (minW > 0) minWidth = minW.dp()
                 layoutParams = TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT, TableRow.LayoutParams.WRAP_CONTENT)
-                    .also { if (marginEnd > 0) it.marginEnd = marginEnd.dp() }
+                    .also {
+                        if (marginStart > 0) it.marginStart = marginStart.dp()
+                        if (marginEnd > 0) it.marginEnd = marginEnd.dp()
+                    }
             }
 
-        // Höjd storlek för siffran inuti boxen (från 16f till 20f)
+        // Set with red and blue bg
         fun setCountCell(text: String, winnerRow: Boolean) = TextView(this).apply {
             this.text = text
-            textSize = 20f
+            textSize = 30f  // 20f player wins names and set numbers
             gravity = Gravity.CENTER
             setTextColor(whiteColor)
             includeFontPadding = false
@@ -379,15 +392,14 @@ class MainActivity : AppCompatActivity() {
             val isWinner = player == state.matchWinner
             val nameColor = if (isWinner) winnerColor else whiteColor
             table.addView(TableRow(this).apply {
-                // Ökat minW för namnet till 100dp och text till 20f
-                addView(cell(name, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 100, marginEnd = 12))
+                addView(cell(name, 30f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 120, marginStart = 12, marginEnd = 32))
                 addView(setCountCell(sets.toString(), isWinner))
                 state.setResults.forEach { setResult ->
                     val playerScore = if (player == 1) setResult.first else setResult.second
                     val wonThisSet = if (player == 1) setResult.first > setResult.second else setResult.second > setResult.first
                     val scoreColor = if (wonThisSet) winnerColor else whiteColor
-                    // Ökat text till 20f och minW till 24dp för set-resultaten
-                    addView(cell(playerScore.toString(), 20f, Gravity.CENTER, scoreColor, bold = wonThisSet, minW = 24, marginEnd = 8))
+                    // Set result and space between set numbers
+                    addView(cell(playerScore.toString(), 30f, Gravity.CENTER, scoreColor, bold = wonThisSet, minW = 36, marginEnd = 8))
                 }
             })
         }
@@ -689,7 +701,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             val horizontalPadding = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,
-                20f,
+                10f,
                 resources.displayMetrics,
             ).toInt()
             val topPadding = TypedValue.applyDimension(
