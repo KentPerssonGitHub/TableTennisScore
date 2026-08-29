@@ -1,13 +1,9 @@
 package com.example.tabletennisscore
 
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
-import android.text.style.ImageSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -179,7 +175,7 @@ class PointDetailsActivity : AppCompatActivity() {
         }
         
         fun createSmallStat(playerName: String, stats: ServeStats) = TextView(this).apply {
-            text = "%s: %.0f%% (%d/%d)".format(playerName, stats.percentage, stats.pointsWonOnServe, stats.totalServes)
+            text = getString(R.string.serve_win_pct_label_with_count, playerName, stats.percentage, stats.pointsWonOnServe, stats.totalServes)
             setTextColor(ContextCompat.getColor(context, R.color.score_text))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
             includeFontPadding = false
@@ -392,7 +388,7 @@ class PointDetailsActivity : AppCompatActivity() {
         }
 
         fun smallStat(name: String, stats: ServeStats) = TextView(this).apply {
-            text = "%s: %.0f%%".format(name, stats.percentage)
+            text = getString(R.string.serve_win_pct_label_simple, name, stats.percentage)
             setTextColor(ContextCompat.getColor(context, R.color.score_text))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
             includeFontPadding = false
@@ -623,20 +619,5 @@ class PointDetailsActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_MATCH_ID = "extra_match_id"
-    }
-}
-
-/** Custom ImageSpan to center the drawable vertically with text. */
-class CenteredImageSpan(drawable: Drawable) : ImageSpan(drawable) {
-    override fun draw(
-        canvas: Canvas, text: CharSequence?, start: Int, end: Int,
-        x: Float, top: Int, y: Int, bottom: Int, paint: Paint
-    ) {
-        val b = drawable
-        canvas.save()
-        val transY = (bottom - top) / 2 - b.bounds.height() / 2 + top
-        canvas.translate(x, transY.toFloat())
-        b.draw(canvas)
-        canvas.restore()
     }
 }

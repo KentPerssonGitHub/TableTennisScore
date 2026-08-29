@@ -9,7 +9,10 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.example.tabletennisscore.data.MatchDatabase
 import com.example.tabletennisscore.data.MatchResult
+import androidx.core.content.edit
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
 /**
  * Holds all game state and enforces table tennis scoring rules.
  *
@@ -56,11 +59,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _state = MutableLiveData(GameState(
-        player1Name = prefs.getString(KEY_PLAYER1_NAME, "Player 1") ?: "Player 1",
-        player2Name = prefs.getString(KEY_PLAYER2_NAME, "Player 2") ?: "Player 2",
-        tournamentName = prefs.getString(KEY_TOURNAMENT_NAME, "") ?: ""
-    ))
+    private val _state = MutableLiveData(
+        GameState(
+            player1Name = prefs.getString(KEY_PLAYER1_NAME, "Player 1") ?: "Player 1",
+            player2Name = prefs.getString(KEY_PLAYER2_NAME, "Player 2") ?: "Player 2",
+            tournamentName = prefs.getString(KEY_TOURNAMENT_NAME, "") ?: ""
+        )
+    )
     val state: LiveData<GameState> = _state
 
     // History stack for undo support (max 50 entries)
@@ -359,10 +364,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val sP1Name = sanitizePlayerName(player1Name, "Player 1")
         val sP2Name = sanitizePlayerName(player2Name, "Player 2")
         
-        prefs.edit()
-            .putString(KEY_PLAYER1_NAME, sP1Name)
-            .putString(KEY_PLAYER2_NAME, sP2Name)
-            .apply()
+        prefs.edit {
+            putString(KEY_PLAYER1_NAME, sP1Name)
+            putString(KEY_PLAYER2_NAME, sP2Name)
+        }
 
         _state.value = GameState(
             bestOfSets = validatedBestOf,
@@ -378,17 +383,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun setPlayerName(player: Int, name: String) {
         val trimmed = sanitizePlayerName(name, if (player == 1) "Player 1" else "Player 2")
         _state.value = if (player == 1) {
-            prefs.edit().putString(KEY_PLAYER1_NAME, trimmed).apply()
+            prefs.edit { putString(KEY_PLAYER1_NAME, trimmed) }
             current.copy(player1Name = trimmed)
         } else {
-            prefs.edit().putString(KEY_PLAYER2_NAME, trimmed).apply()
+            prefs.edit { putString(KEY_PLAYER2_NAME, trimmed) }
             current.copy(player2Name = trimmed)
         }
     }
 
     fun setTournamentName(name: String) {
         val sanitized = sanitizeTournamentName(name)
-        prefs.edit().putString(KEY_TOURNAMENT_NAME, sanitized).apply()
+        prefs.edit { putString(KEY_TOURNAMENT_NAME, sanitized) }
         _state.value = current.copy(tournamentName = sanitized)
     }
 
@@ -464,7 +469,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun isSetWon(s1: Int, s2: Int): Boolean {
-        return (s1 >= 11 || s2 >= 11) && Math.abs(s1 - s2) >= 2
+        return (s1 >= 11 || s2 >= 11) && abs(s1 - s2) >= 2
     }
 
     private fun isMatchWon(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {

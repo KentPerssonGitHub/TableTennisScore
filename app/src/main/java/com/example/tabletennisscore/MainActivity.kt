@@ -2,7 +2,6 @@ package com.example.tabletennisscore
 
 import android.animation.ValueAnimator
 import android.content.Intent
-import android.graphics.Color
 import android.os.Handler
 import android.text.InputFilter
 import android.text.Spanned
@@ -33,6 +32,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.graphics.toColorInt
 import com.example.tabletennisscore.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
@@ -188,7 +188,7 @@ class MainActivity : AppCompatActivity() {
 
             // Tournament name
             val tName = state.tournamentName
-            binding.tvTournamentName.text = if (tName.isBlank()) getString(R.string.tournament_name_default) else tName
+            binding.tvTournamentName.text = tName.ifBlank { getString(R.string.tournament_name_default) }
             binding.tvTournamentName.alpha = if (tName.isBlank()) 0.35f else 0.70f
 
             if (state.decidingSetSwapNoticeVersion > lastShownDecidingSwapNoticeVersion) {
@@ -304,10 +304,8 @@ class MainActivity : AppCompatActivity() {
             R.string.match_summary_time,
             formatElapsedTime(viewModel.getElapsedPlayedMs()),
         )
-        binding.matchSummaryPanel.setBackgroundColor(Color.parseColor("#CC220000"))
+        binding.matchSummaryPanel.setBackgroundColor("#CC220000".toColorInt())
 
-        // Position panel on the winning player's displayed side of the screen
-        val winnerOnLeft = (state.matchWinner == 1) != state.sidesSwapped
         // Position panel in the center of the screen
         val margin = (12 * resources.displayMetrics.density).toInt()
         ConstraintSet().apply {
@@ -690,15 +688,6 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.error_invalid_manual_score, Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
-    }
-
-    private fun confirmReset() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.confirm_reset_title)
-            .setMessage(R.string.confirm_reset_message)
-            .setPositiveButton(R.string.dialog_ok) { _, _ -> viewModel.resetMatch() }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
     }
