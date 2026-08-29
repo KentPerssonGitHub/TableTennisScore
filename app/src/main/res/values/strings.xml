@@ -69,4 +69,6 @@
     <string name="point_details_title">Match Progression</string>
     <string name="point_history_set_label">Set %1$d</string>
     <string name="point_history_empty">No point history available for this match.</string>
+    <string name="serve_win_pct_label">%1$s serve win: %2$s</string>
+    <string name="serve_win_pct_short">Serve Win</string>
 </resources>

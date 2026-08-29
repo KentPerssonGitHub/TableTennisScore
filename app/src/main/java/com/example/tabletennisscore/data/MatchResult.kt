@@ -22,6 +22,7 @@ data class MatchResult(
     val durationMs: Long,
     val setResultsJson: String,
     val pointHistoryJson: String = "",
+    val matchFirstServer: Int = 1,
     val playedAt: Long = System.currentTimeMillis(),
 )
 

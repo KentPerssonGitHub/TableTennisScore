@@ -147,6 +147,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     bestOfSets = s.bestOfSets,
                     setResults = setResults,
                     pointHistory = newPointHistory,
+                    matchFirstServer = matchFirstServer,
                 )
                 // Match over — do NOT swap sides
             } else {
@@ -280,6 +281,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     bestOfSets = current.bestOfSets,
                     setResults = finalSetResults,
                     pointHistory = finalPointHistory,
+                    matchFirstServer = matchFirstServer,
                 )
             }
             _state.value = current.copy(
@@ -386,6 +388,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         bestOfSets: Int,
         setResults: List<Pair<Int, Int>>,
         pointHistory: List<List<Int>>,
+        matchFirstServer: Int,
     ) {
         val durationMs = elapsedPlayedMs
         val setResultsJson = setResults.joinToString(",") { "${it.first}-${it.second}" }
@@ -405,6 +408,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     durationMs = durationMs,
                     setResultsJson = setResultsJson,
                     pointHistoryJson = pointHistoryJson,
+                    matchFirstServer = matchFirstServer,
                 )
             )
         }

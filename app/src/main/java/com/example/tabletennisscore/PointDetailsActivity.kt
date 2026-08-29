@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import java.util.Locale
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
@@ -50,7 +51,7 @@ class PointDetailsActivity : AppCompatActivity() {
         binding.layoutPointsContainer.removeAllViews()
 
         val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
-        
+
         // Winner Title
         binding.layoutPointsContainer.addView(TextView(this).apply {
             text = getString(R.string.history_winner_only, winnerName)
@@ -58,11 +59,11 @@ class PointDetailsActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setTypeface(null, android.graphics.Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(0, 8.dp(), 0, 16.dp())
+            setPadding(0, 8.dp(), 0, 8.dp())
         })
 
-        val setsPoints = result.pointHistoryJson.split(",")
-        if (result.pointHistoryJson.isBlank()) {
+        val setsPoints = result.pointHistoryJson.split(",").filter { it.isNotBlank() }
+        if (setsPoints.isEmpty()) {
             val tv = TextView(this).apply {
                 text = getString(R.string.point_history_empty)
                 setTextColor(ContextCompat.getColor(context, R.color.score_text))
@@ -74,10 +75,112 @@ class PointDetailsActivity : AppCompatActivity() {
             return
         }
 
+        val p1MatchStats = ServeStats()
+        val p2MatchStats = ServeStats()
+        val setStats = mutableListOf<Pair<ServeStats, ServeStats>>()
+
+        setsPoints.forEachIndexed { setIndex, pointsStr ->
+            val p1SetStats = ServeStats()
+            val p2SetStats = ServeStats()
+            
+            val setFirstServer = currentSetFirstServer(setIndex, result.matchFirstServer)
+            var s1 = 0
+            var s2 = 0
+            
+            pointsStr.forEach { char ->
+                val pointWinner = if (char == '1') 1 else 2
+                val currentServer = nextServer(s1, s2, s1 + s2, setFirstServer)
+                
+                if (currentServer == 1) {
+                    p1SetStats.totalServes++
+                    if (pointWinner == 1) p1SetStats.pointsWonOnServe++
+                } else {
+                    p2SetStats.totalServes++
+                    if (pointWinner == 2) p2SetStats.pointsWonOnServe++
+                }
+                
+                if (pointWinner == 1) s1++ else s2++
+            }
+            
+            setStats.add(p1SetStats to p2SetStats)
+            p1MatchStats.pointsWonOnServe += p1SetStats.pointsWonOnServe
+            p1MatchStats.totalServes += p1SetStats.totalServes
+            p2MatchStats.pointsWonOnServe += p2SetStats.pointsWonOnServe
+            p2MatchStats.totalServes += p2SetStats.totalServes
+        }
+
+        // Match Summary Stats
+        val matchSummaryLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 16.dp())
+        }
+        matchSummaryLayout.addView(createStatTextView(
+            getString(R.string.serve_win_pct_label, result.player1Name, String.format(Locale.getDefault(), "%.0f%%", p1MatchStats.percentage))
+        ))
+        matchSummaryLayout.addView(createStatTextView(
+            getString(R.string.serve_win_pct_label, result.player2Name, String.format(Locale.getDefault(), "%.0f%%", p2MatchStats.percentage))
+        ))
+        binding.layoutPointsContainer.addView(matchSummaryLayout)
+
         setsPoints.forEachIndexed { index, pointsStr ->
             addSetHeader(index + 1)
             addPointsProgression(pointsStr, result.player1Name, result.player2Name)
+            
+            // Set Stats
+            val (p1S, p2S) = setStats[index]
+            val setStatsLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 16.dp())
+            }
+            setStatsLayout.addView(createStatTextView(String.format(Locale.getDefault(), "%.0f%%", p1S.percentage)).apply { 
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            setStatsLayout.addView(TextView(this).apply {
+                text = getString(R.string.serve_win_pct_short)
+                setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                gravity = Gravity.CENTER
+            })
+            setStatsLayout.addView(createStatTextView(String.format(Locale.getDefault(), "%.0f%%", p2S.percentage)).apply { 
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            binding.layoutPointsContainer.addView(setStatsLayout)
         }
+    }
+
+    private fun createStatTextView(text: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            setTextColor(ContextCompat.getColor(context, R.color.score_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            gravity = Gravity.CENTER
+        }
+    }
+
+    private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {
+        return if (s1 >= 10 && s2 >= 10) {
+            val pointsSinceDeuce = (s1 - 10) + (s2 - 10)
+            if (pointsSinceDeuce % 2 == 0) firstServer else otherPlayer(firstServer)
+        } else {
+            val block = total / 2
+            if (block % 2 == 0) firstServer else otherPlayer(firstServer)
+        }
+    }
+
+    private fun otherPlayer(p: Int) = if (p == 1) 2 else 1
+
+    private fun currentSetFirstServer(completedSetCount: Int, matchFirstServer: Int): Int {
+        return if (completedSetCount % 2 == 0) matchFirstServer else otherPlayer(matchFirstServer)
+    }
+
+    private data class ServeStats(
+        var pointsWonOnServe: Int = 0,
+        var totalServes: Int = 0
+    ) {
+        val percentage: Double
+            get() = if (totalServes > 0) (pointsWonOnServe.toDouble() / totalServes * 100) else 0.0
     }
 
     private fun addSetHeader(setNumber: Int) {
@@ -129,7 +232,8 @@ class PointDetailsActivity : AppCompatActivity() {
         var s2 = 0
         var deuceReached = false
         pointsStr.forEach { char ->
-            if (char == '1') s1++ else if (char == '2') s2++
+            val winner = if (char == '1') 1 else 2
+            if (winner == 1) s1++ else s2++
 
             // Add scores
             val col = LinearLayout(this).apply {
@@ -140,8 +244,8 @@ class PointDetailsActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { marginEnd = 12.dp() }
             }
-            col.addView(createScoreTextView(s1.toString()))
-            col.addView(createScoreTextView(s2.toString()))
+            col.addView(createScoreTextView(s1.toString(), winner == 1))
+            col.addView(createScoreTextView(s2.toString(), winner == 2))
             scoresLayout.addView(col)
 
             // Add separator at 10-10
@@ -175,10 +279,16 @@ class PointDetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun createScoreTextView(text: String): TextView {
+    private fun createScoreTextView(text: String, isPointWinner: Boolean): TextView {
         return TextView(this).apply {
             this.text = text
-            setTextColor(ContextCompat.getColor(context, R.color.score_text))
+            if (isPointWinner) {
+                setTextColor(ContextCompat.getColor(context, R.color.sets_text))
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            } else {
+                setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
+                setTypeface(null, android.graphics.Typeface.NORMAL)
+            }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 2.dp(), 0, 2.dp())
             gravity = Gravity.CENTER
