@@ -503,6 +503,7 @@ class PointDetailsActivity : AppCompatActivity() {
                 text = "$name: "
                 setTextColor(ContextCompat.getColor(context, R.color.player_name))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                includeFontPadding = false
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
