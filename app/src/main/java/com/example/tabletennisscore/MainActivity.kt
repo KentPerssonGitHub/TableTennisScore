@@ -91,6 +91,21 @@ class MainActivity : AppCompatActivity() {
             viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
         }
 
+        binding.tvScore1.setOnLongClickListener {
+            val state = viewModel.state.value
+            if (state?.isMatchRunning == false && state.matchWinner == null && state.hasMatchStarted) {
+                showEditScoreDialog()
+                true
+            } else false
+        }
+        binding.tvScore2.setOnLongClickListener {
+            val state = viewModel.state.value
+            if (state?.isMatchRunning == false && state.matchWinner == null && state.hasMatchStarted) {
+                showEditScoreDialog()
+                true
+            } else false
+        }
+
         // Name long-press – long-press name to edit to avoid accidental taps near swap icon
         binding.tvPlayer1Name.setOnLongClickListener {
             showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)

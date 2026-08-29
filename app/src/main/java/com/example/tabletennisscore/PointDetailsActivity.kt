@@ -1,15 +1,24 @@
 package com.example.tabletennisscore
 
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
+import android.text.style.ImageSpan
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import java.util.Locale
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
@@ -50,18 +59,6 @@ class PointDetailsActivity : AppCompatActivity() {
     private fun renderDetails(result: MatchResult) {
         binding.layoutPointsContainer.removeAllViews()
 
-        val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
-
-        // Winner Title
-        binding.layoutPointsContainer.addView(TextView(this).apply {
-            text = getString(R.string.history_winner_only, winnerName)
-            setTextColor(ContextCompat.getColor(context, R.color.score_text))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(0, 8.dp(), 0, 8.dp())
-        })
-
         val setsPoints = result.pointHistoryJson.split(",").filter { it.isNotBlank() }
         if (setsPoints.isEmpty()) {
             val tv = TextView(this).apply {
@@ -75,6 +72,7 @@ class PointDetailsActivity : AppCompatActivity() {
             return
         }
 
+        // 1. Calculate stats first
         val p1MatchStats = ServeStats()
         val p2MatchStats = ServeStats()
         val setStats = mutableListOf<Pair<ServeStats, ServeStats>>()
@@ -82,7 +80,6 @@ class PointDetailsActivity : AppCompatActivity() {
         setsPoints.forEachIndexed { setIndex, pointsStr ->
             val p1SetStats = ServeStats()
             val p2SetStats = ServeStats()
-            
             val setFirstServer = currentSetFirstServer(setIndex, result.matchFirstServer)
             var s1 = 0
             var s2 = 0
@@ -90,7 +87,6 @@ class PointDetailsActivity : AppCompatActivity() {
             pointsStr.forEach { char ->
                 val pointWinner = if (char == '1') 1 else 2
                 val currentServer = nextServer(s1, s2, s1 + s2, setFirstServer)
-                
                 if (currentServer == 1) {
                     p1SetStats.totalServes++
                     if (pointWinner == 1) p1SetStats.pointsWonOnServe++
@@ -98,10 +94,8 @@ class PointDetailsActivity : AppCompatActivity() {
                     p2SetStats.totalServes++
                     if (pointWinner == 2) p2SetStats.pointsWonOnServe++
                 }
-                
                 if (pointWinner == 1) s1++ else s2++
             }
-            
             setStats.add(p1SetStats to p2SetStats)
             p1MatchStats.pointsWonOnServe += p1SetStats.pointsWonOnServe
             p1MatchStats.totalServes += p1SetStats.totalServes
@@ -109,54 +103,182 @@ class PointDetailsActivity : AppCompatActivity() {
             p2MatchStats.totalServes += p2SetStats.totalServes
         }
 
-        // Match Summary Stats
-        val matchSummaryLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 16.dp())
+        // 2. Header Layout: [Tournament (Left Half)] [Winner (Center)] [Stats (Right Half)]
+        val headerLayout = ConstraintLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(16.dp(), 12.dp(), 16.dp(), 16.dp())
+            clipToPadding = false
         }
-        matchSummaryLayout.addView(createStatTextView(
-            getString(R.string.serve_win_pct_label, result.player1Name, String.format(Locale.getDefault(), "%.0f%%", p1MatchStats.percentage))
-        ))
-        matchSummaryLayout.addView(createStatTextView(
-            getString(R.string.serve_win_pct_label, result.player2Name, String.format(Locale.getDefault(), "%.0f%%", p2MatchStats.percentage))
-        ))
-        binding.layoutPointsContainer.addView(matchSummaryLayout)
+
+        // Tournament Name
+        val tvTournament = if (result.tournamentName.isNotBlank()) {
+            TextView(this).apply {
+                id = View.generateViewId()
+                text = result.tournamentName
+                setTextColor(ContextCompat.getColor(context, R.color.player_name))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                alpha = 0.6f
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER
+            }.also { headerLayout.addView(it) }
+        } else null
+
+        // Winner Title
+        val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
+        val tvWinner = TextView(this).apply {
+            id = View.generateViewId()
+            text = getString(R.string.history_winner_only, winnerName)
+            setTextColor(ContextCompat.getColor(context, R.color.score_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
+        headerLayout.addView(tvWinner)
+
+        // Sets Summary
+        val tvSetsSummary = TextView(this).apply {
+            id = View.generateViewId()
+            text = "(%d - %d)".format(result.sets1, result.sets2)
+            setTextColor(ContextCompat.getColor(context, R.color.player_name))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            alpha = 0.8f
+            gravity = Gravity.CENTER
+        }
+        headerLayout.addView(tvSetsSummary)
+
+        // All Sets Scores Summary
+        val tvAllSetsSummary = TextView(this).apply {
+            id = View.generateViewId()
+            text = buildAllSetsSpannable(result.setResultsJson)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            alpha = 0.9f
+            gravity = Gravity.CENTER
+        }
+        headerLayout.addView(tvAllSetsSummary)
+
+        // Stats Block
+        val statsContainer = LinearLayout(this).apply {
+            id = View.generateViewId()
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        
+        val statsLabel = TextView(this).apply {
+            id = View.generateViewId()
+            text = "Serve win: "
+            setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            setPadding(0, 0, 4.dp(), 0)
+        }
+        statsContainer.addView(statsLabel)
+
+        val playerStatsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+        }
+        
+        fun createSmallStat(playerName: String, stats: ServeStats) = TextView(this).apply {
+            text = "%s: %.0f%% (%d/%d)".format(playerName, stats.percentage, stats.pointsWonOnServe, stats.totalServes)
+            setTextColor(ContextCompat.getColor(context, R.color.score_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            includeFontPadding = false
+            alpha = 0.8f
+        }
+
+        playerStatsLayout.addView(if (result.winner == 1) createSmallStat(result.player1Name, p1MatchStats) 
+                                   else createSmallStat(result.player2Name, p2MatchStats))
+        playerStatsLayout.addView(if (result.winner == 1) createSmallStat(result.player2Name, p2MatchStats) 
+                                   else createSmallStat(result.player1Name, p1MatchStats))
+        statsContainer.addView(playerStatsLayout)
+        headerLayout.addView(statsContainer)
+
+        // Constraints
+        val set = androidx.constraintlayout.widget.ConstraintSet()
+        set.clone(headerLayout)
+        
+        // Winner -> absolute top center
+        set.connect(tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+        set.connect(tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+        set.connect(tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
+
+        // Sets Summary -> centered under Winner
+        set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+        set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+        set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+
+        // All Sets Summary -> centered under Sets Summary
+        set.connect(tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+        set.connect(tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+        set.connect(tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+        set.connect(tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+        
+        // Create Guideline at 68% for stats start
+        val statsGuidelineId = View.generateViewId()
+        set.create(statsGuidelineId, androidx.constraintlayout.widget.ConstraintSet.VERTICAL_GUIDELINE)
+        set.setGuidelinePercent(statsGuidelineId, 0.68f)
+
+        // Stats -> start at guideline
+        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.START, statsGuidelineId, androidx.constraintlayout.widget.ConstraintSet.START)
+        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.TOP)
+        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+
+        // Tournament -> pinned position on left
+        tvTournament?.let {
+            set.connect(it.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+            set.connect(it.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+            set.connect(it.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.TOP)
+            set.connect(it.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+            set.setHorizontalBias(it.id, 0.05f)
+            set.constrainWidth(it.id, androidx.constraintlayout.widget.ConstraintSet.MATCH_CONSTRAINT)
+            set.constrainMaxWidth(it.id, 130.dp())
+        }
+
+        set.applyTo(headerLayout)
+        binding.layoutPointsContainer.addView(headerLayout)
 
         setsPoints.forEachIndexed { index, pointsStr ->
-            addSetHeader(index + 1)
-            addPointsProgression(pointsStr, result.player1Name, result.player2Name)
-            
-            // Set Stats
             val (p1S, p2S) = setStats[index]
-            val setStatsLayout = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 16.dp())
-            }
-            setStatsLayout.addView(createStatTextView(String.format(Locale.getDefault(), "%.0f%%", p1S.percentage)).apply { 
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            setStatsLayout.addView(TextView(this).apply {
-                text = getString(R.string.serve_win_pct_short)
-                setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-                gravity = Gravity.CENTER
-            })
-            setStatsLayout.addView(createStatTextView(String.format(Locale.getDefault(), "%.0f%%", p2S.percentage)).apply { 
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            binding.layoutPointsContainer.addView(setStatsLayout)
+            val setWinner = if (pointsStr.endsWith('1')) 1 else 2
+            val setFirstServer = currentSetFirstServer(index, result.matchFirstServer)
+            addSetHeaderWithStats(index + 1, p1S, p2S, result.player1Name, result.player2Name, result.winner)
+            addPointsProgression(pointsStr, result.player1Name, result.player2Name, setWinner, setFirstServer)
         }
     }
 
-    private fun createStatTextView(text: String): TextView {
-        return TextView(this).apply {
-            this.text = text
-            setTextColor(ContextCompat.getColor(context, R.color.score_text))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            gravity = Gravity.CENTER
+    private fun buildAllSetsSpannable(setResultsJson: String): CharSequence {
+        val builder = SpannableStringBuilder("(")
+        val blueColor = ContextCompat.getColor(this, R.color.sets_text)
+        val normalColor = ContextCompat.getColor(this, R.color.score_text)
+        
+        val sets = setResultsJson.split(",").filter { it.isNotBlank() }
+        sets.forEachIndexed { i, s ->
+            val parts = s.split("-")
+            if (parts.size == 2) {
+                val s1 = parts[0].toIntOrNull() ?: 0
+                val s2 = parts[1].toIntOrNull() ?: 0
+                
+                // Score 1
+                val start1 = builder.length
+                builder.append(s1.toString())
+                if (s1 > s2) builder.setSpan(ForegroundColorSpan(blueColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                else builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                
+                builder.append(" - ")
+                
+                // Score 2
+                val start2 = builder.length
+                builder.append(s2.toString())
+                if (s2 > s1) builder.setSpan(ForegroundColorSpan(blueColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                else builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            if (i < sets.size - 1) builder.append(", ")
         }
+        builder.append(")")
+        return builder
     }
 
     private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {
@@ -183,35 +305,117 @@ class PointDetailsActivity : AppCompatActivity() {
             get() = if (totalServes > 0) (pointsWonOnServe.toDouble() / totalServes * 100) else 0.0
     }
 
-    private fun addSetHeader(setNumber: Int) {
-        val tv = TextView(this).apply {
+    private fun addSetHeaderWithStats(
+        setNumber: Int,
+        p1S: ServeStats,
+        p2S: ServeStats,
+        p1Name: String,
+        p2Name: String,
+        matchWinner: Int
+    ) {
+        val headerLayout = ConstraintLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setPadding(16.dp(), 8.dp(), 16.dp(), 0)
+            clipToPadding = false
+        }
+
+        // Set Label
+        val tvSet = TextView(this).apply {
+            id = View.generateViewId()
             text = getString(R.string.point_history_set_label, setNumber)
             setTextColor(ContextCompat.getColor(context, R.color.player_name))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTypeface(null, android.graphics.Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(0, 8.dp(), 0, 4.dp())
         }
-        binding.layoutPointsContainer.addView(tv)
+        headerLayout.addView(tvSet)
+
+        // Stats Block
+        val statsContainer = LinearLayout(this).apply {
+            id = View.generateViewId()
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        
+        val statsLabel = TextView(this).apply {
+            id = View.generateViewId()
+            text = "Serve win: "
+            setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            setPadding(0, 0, 4.dp(), 0)
+        }
+        statsContainer.addView(statsLabel)
+
+        val playerStatsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+        }
+
+        fun smallStat(name: String, stats: ServeStats) = TextView(this).apply {
+            text = "%s: %.0f%%".format(name, stats.percentage)
+            setTextColor(ContextCompat.getColor(context, R.color.score_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            includeFontPadding = false
+            alpha = 0.7f
+        }
+
+        playerStatsLayout.addView(if (matchWinner == 1) smallStat(p1Name, p1S) else smallStat(p2Name, p2S))
+        playerStatsLayout.addView(if (matchWinner == 1) smallStat(p2Name, p2S) else smallStat(p1Name, p1S))
+        statsContainer.addView(playerStatsLayout)
+        headerLayout.addView(statsContainer)
+
+        val set = androidx.constraintlayout.widget.ConstraintSet()
+        set.clone(headerLayout)
+        
+        set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+        set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+        set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
+        set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+        
+        // Guideline at same 68% for set stats
+        val setStatsGuidelineId = View.generateViewId()
+        set.create(setStatsGuidelineId, androidx.constraintlayout.widget.ConstraintSet.VERTICAL_GUIDELINE)
+        set.setGuidelinePercent(setStatsGuidelineId, 0.68f)
+
+        // Stats -> start at guideline
+        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.START, setStatsGuidelineId, androidx.constraintlayout.widget.ConstraintSet.START)
+        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvSet.id, androidx.constraintlayout.widget.ConstraintSet.TOP)
+        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, tvSet.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+
+        set.applyTo(headerLayout)
+        binding.layoutPointsContainer.addView(headerLayout)
     }
 
-    private fun addPointsProgression(pointsStr: String, p1Name: String, p2Name: String) {
+    private fun addPointsProgression(pointsStr: String, p1Name: String, p2Name: String, setWinner: Int, setFirstServer: Int) {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(8.dp(), 0, 8.dp(), 12.dp())
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Labels Column
+        // Labels Column - Set winner on top
         val labelsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = 16.dp() }
+            ).apply { marginEnd = 8.dp() }
         }
-        labelsLayout.addView(createLabelTextView("$p1Name:"))
-        labelsLayout.addView(createLabelTextView("$p2Name:"))
+        
+        val topPlayer = if (setWinner == 1) 1 else 2
+        val bottomPlayer = if (setWinner == 1) 2 else 1
+        
+        labelsLayout.addView(createLabelRow(
+            if (topPlayer == 1) p1Name else p2Name, 
+            topPlayer == setFirstServer
+        ))
+        labelsLayout.addView(createLabelRow(
+            if (bottomPlayer == 1) p1Name else p2Name, 
+            bottomPlayer == setFirstServer
+        ))
         container.addView(labelsLayout)
 
         // Scrollable Scores
@@ -232,8 +436,8 @@ class PointDetailsActivity : AppCompatActivity() {
         var s2 = 0
         var deuceReached = false
         pointsStr.forEach { char ->
-            val winner = if (char == '1') 1 else 2
-            if (winner == 1) s1++ else s2++
+            val pointWinner = if (char == '1') 1 else 2
+            if (pointWinner == 1) s1++ else s2++
 
             // Add scores
             val col = LinearLayout(this).apply {
@@ -244,8 +448,15 @@ class PointDetailsActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { marginEnd = 12.dp() }
             }
-            col.addView(createScoreTextView(s1.toString(), winner == 1))
-            col.addView(createScoreTextView(s2.toString(), winner == 2))
+            
+            // Set winner row score on top
+            if (setWinner == 1) {
+                col.addView(createScoreTextView(s1.toString(), pointWinner == 1))
+                col.addView(createScoreTextView(s2.toString(), pointWinner == 2))
+            } else {
+                col.addView(createScoreTextView(s2.toString(), pointWinner == 2))
+                col.addView(createScoreTextView(s1.toString(), pointWinner == 1))
+            }
             scoresLayout.addView(col)
 
             // Add separator at 10-10
@@ -267,15 +478,36 @@ class PointDetailsActivity : AppCompatActivity() {
         binding.layoutPointsContainer.addView(container)
     }
 
-    private fun createLabelTextView(text: String): TextView {
-        return TextView(this).apply {
-            this.text = text
-            setTextColor(ContextCompat.getColor(context, R.color.player_name))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+
+    private fun createLabelRow(name: String, isFirstServer: Boolean): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(140.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
             setPadding(0, 2.dp(), 0, 2.dp())
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            layoutParams = LinearLayout.LayoutParams(100.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
+
+            // Ball icon - positioned to the far left
+            val ivBall = ImageView(this@PointDetailsActivity).apply {
+                val size = (12 * resources.displayMetrics.density).toInt()
+                layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                    marginEnd = 12.dp() // Increased space between ball and name
+                }
+                setImageResource(R.drawable.stigaperform40size128)
+                // Use INVISIBLE so it still takes up space, keeping names aligned
+                visibility = if (isFirstServer) View.VISIBLE else View.INVISIBLE
+            }
+            addView(ivBall)
+
+            // Name
+            val tvName = TextView(this@PointDetailsActivity).apply {
+                text = "$name: "
+                setTextColor(ContextCompat.getColor(context, R.color.player_name))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            addView(tvName)
         }
     }
 
@@ -313,5 +545,20 @@ class PointDetailsActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_MATCH_ID = "extra_match_id"
+    }
+}
+
+/** Custom ImageSpan to center the drawable vertically with text. */
+class CenteredImageSpan(drawable: Drawable) : ImageSpan(drawable) {
+    override fun draw(
+        canvas: Canvas, text: CharSequence?, start: Int, end: Int,
+        x: Float, top: Int, y: Int, bottom: Int, paint: Paint
+    ) {
+        val b = drawable
+        canvas.save()
+        val transY = (bottom - top) / 2 - b.bounds.height() / 2 + top
+        canvas.translate(x, transY.toFloat())
+        b.draw(canvas)
+        canvas.restore()
     }
 }

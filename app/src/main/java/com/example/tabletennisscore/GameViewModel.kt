@@ -193,6 +193,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             bestOfSets = current.bestOfSets,
             player1Name = current.player1Name,
             player2Name = current.player2Name,
+            tournamentName = current.tournamentName,
         )
     }
 
@@ -348,6 +349,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             server = matchFirstServer,
             player1Name = sanitizePlayerName(player1Name, "Player 1"),
             player2Name = sanitizePlayerName(player2Name, "Player 2"),
+            tournamentName = current.tournamentName,
             isMatchRunning = false,
             hasMatchStarted = false,
         )
