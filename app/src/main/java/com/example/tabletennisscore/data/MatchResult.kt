@@ -25,4 +25,3 @@ data class MatchResult(
     val matchFirstServer: Int = 1,
     val playedAt: Long = System.currentTimeMillis(),
 )
-

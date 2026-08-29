@@ -24,4 +24,3 @@ interface MatchResultDao {
     @Query("DELETE FROM match_results")
     suspend fun deleteAll()
 }
-

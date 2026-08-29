@@ -294,15 +294,15 @@
 
     <LinearLayout
         android:id="@+id/matchSummaryPanel"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="#66000000"
         android:orientation="vertical"
         android:padding="10dp"
         android:visibility="gone"
+        app:layout_constrainedWidth="true"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/guidelineP1SummaryEnd"
-        app:layout_constraintWidth_default="wrap"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <TextView
