@@ -1,5 +1,6 @@
 package com.example.tabletennisscore
 
+import android.content.Intent
 import android.os.Bundle
 import android.graphics.Typeface
 import android.util.TypedValue
@@ -43,6 +44,12 @@ class HistoryActivity : AppCompatActivity() {
                 }
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show()
+        },
+        onDetails = { result ->
+            val intent = Intent(this, PointDetailsActivity::class.java).apply {
+                putExtra(PointDetailsActivity.EXTRA_MATCH_ID, result.id)
+            }
+            startActivity(intent)
         }
     )
 
@@ -82,6 +89,7 @@ class HistoryActivity : AppCompatActivity() {
 
     class MatchHistoryAdapter(
         private val onDelete: (MatchResult) -> Unit,
+        private val onDetails: (MatchResult) -> Unit,
     ) : ListAdapter<MatchResult, MatchHistoryAdapter.ViewHolder>(DIFF) {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -91,24 +99,27 @@ class HistoryActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) =
-            holder.bind(getItem(position), onDelete)
+            holder.bind(getItem(position), onDelete, onDetails)
 
         class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             private val scoreGrid: LinearLayout = view.findViewById(R.id.layoutItemScoreGrid)
             private val tvDuration: TextView = view.findViewById(R.id.tvItemDuration)
             private val tvDate: TextView = view.findViewById(R.id.tvItemDate)
+            private val tvWinner: TextView = view.findViewById(R.id.tvItemWinner)
             private val tvTournament: TextView = view.findViewById(R.id.tvItemTournament)
             private val btnDelete: View = view.findViewById(R.id.btnItemDelete)
+            private val btnDetails: View = view.findViewById(R.id.btnItemDetails)
 
             private val dateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
             private val density = view.resources.displayMetrics.density
 
-            fun bind(result: MatchResult, onDelete: (MatchResult) -> Unit) {
+            fun bind(result: MatchResult, onDelete: (MatchResult) -> Unit, onDetails: (MatchResult) -> Unit) {
                 val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
                 val loserName = if (result.winner == 1) result.player2Name else result.player1Name
                 val setResults = parseSetResults(result.setResultsJson)
 
                 renderScoreGrid(result, winnerName, loserName, setResults)
+                tvWinner.text = itemView.context.getString(R.string.history_winner_only, winnerName)
                 tvDuration.text = formatDuration(result.durationMs)
                 tvDate.text = dateFormat.format(Date(result.playedAt))
                 tvTournament.text = itemView.context.getString(
@@ -117,6 +128,7 @@ class HistoryActivity : AppCompatActivity() {
                 )
                 tvTournament.visibility = if (result.tournamentName.isBlank()) View.GONE else View.VISIBLE
                 btnDelete.setOnClickListener { onDelete(result) }
+                btnDetails.setOnClickListener { onDetails(result) }
             }
 
             private fun renderScoreGrid(

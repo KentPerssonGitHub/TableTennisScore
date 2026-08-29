@@ -15,6 +15,9 @@ interface MatchResultDao {
     @Query("SELECT * FROM match_results ORDER BY playedAt DESC")
     fun getAll(): Flow<List<MatchResult>>
 
+    @Query("SELECT * FROM match_results WHERE id = :id")
+    fun getById(id: Int): Flow<MatchResult?>
+
     @Query("DELETE FROM match_results WHERE id = :id")
     suspend fun deleteById(id: Int)
 

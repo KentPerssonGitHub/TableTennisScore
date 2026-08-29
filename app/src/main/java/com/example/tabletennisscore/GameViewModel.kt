@@ -40,6 +40,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val hasMatchStarted: Boolean = false,
         val matchWinner: Int? = null, // 1 or 2 when match is finished
         val setResults: List<Pair<Int, Int>> = emptyList(), // score1 to score2 per completed set
+        val pointHistory: List<List<Int>> = listOf(emptyList()), // winner (1 or 2) per point, per set
         val sidesSwapped: Boolean = false, // true when players have physically swapped ends
         val decidingSetFiveSwapDone: Boolean = false,
         val decidingSetSwapNoticeVersion: Int = 0,
@@ -103,7 +104,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var awaitingDecidingSetSwapConfirmation = s.awaitingDecidingSetSwapConfirmation
         var resumeAfterDecidingSetSwapConfirmation = s.resumeAfterDecidingSetSwapConfirmation
         val setResults = s.setResults.toMutableList()
+        val newPointHistory = s.pointHistory.map { it.toMutableList() }.toMutableList()
+
         if (player == 1) score1++ else score2++
+        if (newPointHistory.isEmpty()) newPointHistory.add(mutableListOf())
+        newPointHistory.last().add(player)
 
         if (isDecidingSet(sets1, sets2, s.bestOfSets) &&
             !decidingSetFiveSwapDone &&
@@ -141,11 +146,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     winner = player,
                     bestOfSets = s.bestOfSets,
                     setResults = setResults,
+                    pointHistory = newPointHistory,
                 )
                 // Match over — do NOT swap sides
             } else {
                 sidesSwapped = !sidesSwapped // players switch ends after each set
                 server = currentSetFirstServer(setResults.size)
+                newPointHistory.add(mutableListOf())
             }
             decidingSetFiveSwapDone = false
             awaitingDecidingSetSwapConfirmation = false
@@ -161,6 +168,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             isMatchRunning = isMatchRunning,
             matchWinner = matchWinner,
             setResults = setResults,
+            pointHistory = newPointHistory,
             sidesSwapped = sidesSwapped,
             decidingSetFiveSwapDone = decidingSetFiveSwapDone,
             decidingSetSwapNoticeVersion = decidingSetSwapNoticeVersion,
@@ -254,6 +262,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val finalSets2 = sets2 + if (setWinner == 2) 1 else 0
             val finalSetResults = setResults + listOf(currentScore1 to currentScore2)
             val matchWinner = if (isMatchWon(finalSets1, finalSets2, current.bestOfSets)) setWinner else null
+            
+            // For manual score updates, we can't reliably reconstruct point history.
+            // We'll clear it for simplicity or represent it as empty for the edited sets.
+            val finalPointHistory = finalSetResults.map { emptyList<Int>() }
+
             // Only swap sides if the match is not over
             val newSidesSwapped = if (matchWinner != null) current.sidesSwapped else !current.sidesSwapped
             if (matchWinner != null) {
@@ -266,6 +279,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     winner = matchWinner,
                     bestOfSets = current.bestOfSets,
                     setResults = finalSetResults,
+                    pointHistory = finalPointHistory,
                 )
             }
             _state.value = current.copy(
@@ -274,6 +288,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 sets1 = finalSets1,
                 sets2 = finalSets2,
                 setResults = finalSetResults,
+                pointHistory = if (matchWinner == null) finalPointHistory + listOf(emptyList()) else finalPointHistory,
                 server = currentSetFirstServer(finalSetResults.size),
                 isMatchRunning = false,
                 matchWinner = matchWinner,
@@ -298,12 +313,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 current.decidingSetSwapNoticeVersion
             }
+            
+            // Manual edit: clear point history for reconstructed sets
+            val manualPointHistory = setResults.map { emptyList<Int>() } + listOf(emptyList())
+
             _state.value = current.copy(
                 score1 = currentScore1,
                 score2 = currentScore2,
                 sets1 = sets1,
                 sets2 = sets2,
                 setResults = setResults,
+                pointHistory = manualPointHistory,
                 server = server,
                 sidesSwapped = updatedSides,
                 decidingSetFiveSwapDone = isDecidingSet(sets1, sets2, current.bestOfSets) && (currentScore1 >= 5 || currentScore2 >= 5),
@@ -365,9 +385,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         winner: Int,
         bestOfSets: Int,
         setResults: List<Pair<Int, Int>>,
+        pointHistory: List<List<Int>>,
     ) {
         val durationMs = elapsedPlayedMs
         val setResultsJson = setResults.joinToString(",") { "${it.first}-${it.second}" }
+        val pointHistoryJson = pointHistory.joinToString(",") { setPoints ->
+            setPoints.joinToString("")
+        }
         viewModelScope.launch {
             dao.insert(
                 MatchResult(
@@ -380,6 +404,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     bestOfSets = bestOfSets,
                     durationMs = durationMs,
                     setResultsJson = setResultsJson,
+                    pointHistoryJson = pointHistoryJson,
                 )
             )
         }

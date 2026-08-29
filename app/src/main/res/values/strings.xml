@@ -65,4 +65,8 @@
     <string name="history_players">(%1$s vs %2$s)</string>
     <string name="history_tournament_label">Tournament: %1$s</string>
     <string name="history_set_score">%1$d – %2$d</string>
+    <string name="btn_history_details">Details</string>
+    <string name="point_details_title">Match Progression</string>
+    <string name="point_history_set_label">Set %1$d</string>
+    <string name="point_history_empty">No point history available for this match.</string>
 </resources>

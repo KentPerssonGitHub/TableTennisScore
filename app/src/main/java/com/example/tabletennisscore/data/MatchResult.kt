@@ -21,6 +21,7 @@ data class MatchResult(
     val bestOfSets: Int,
     val durationMs: Long,
     val setResultsJson: String,
+    val pointHistoryJson: String = "",
     val playedAt: Long = System.currentTimeMillis(),
 )
 
