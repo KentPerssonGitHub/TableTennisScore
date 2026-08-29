@@ -49,9 +49,7 @@ class PointDetailsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             dao.getById(matchId).collectLatest { result ->
-                if (result != null) {
-                    renderDetails(result)
-                }
+                result?.let { renderDetails(it) }
             }
         }
     }
@@ -168,7 +166,7 @@ class PointDetailsActivity : AppCompatActivity() {
         
         val statsLabel = TextView(this).apply {
             id = View.generateViewId()
-            text = "Serve win: "
+            text = getString(R.string.serve_win_label)
             setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
             setPadding(0, 0, 4.dp(), 0)
@@ -314,7 +312,7 @@ class PointDetailsActivity : AppCompatActivity() {
                     builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
-            if (i < sets.size - 1) builder.append(", ")
+            if (i < (sets.size - 1)) builder.append(", ")
         }
         builder.append(")")
         return builder
@@ -381,7 +379,7 @@ class PointDetailsActivity : AppCompatActivity() {
         
         val statsLabel = TextView(this).apply {
             id = View.generateViewId()
-            text = "Serve win: "
+            text = getString(R.string.serve_win_label)
             setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
             setPadding(0, 0, 4.dp(), 0)
@@ -544,6 +542,7 @@ class PointDetailsActivity : AppCompatActivity() {
                 val size = (12 * resources.displayMetrics.density).toInt()
                 layoutParams = LinearLayout.LayoutParams(size, size).apply {
                     marginEnd = 8.dp() 
+                    topMargin = 1.dp() // Nudge down slightly for better visual alignment
                 }
                 setImageResource(R.drawable.stigaperform40size128)
                 visibility = if (isFirstServer) View.VISIBLE else View.INVISIBLE
@@ -552,7 +551,8 @@ class PointDetailsActivity : AppCompatActivity() {
 
             // Name
             val tvName = TextView(this@PointDetailsActivity).apply {
-                text = "$name: "
+                val label = "$name: "
+                text = label
                 setTextColor(ContextCompat.getColor(context, R.color.player_name))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 includeFontPadding = false
