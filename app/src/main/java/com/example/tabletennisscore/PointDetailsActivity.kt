@@ -142,10 +142,9 @@ class PointDetailsActivity : AppCompatActivity() {
         // Sets Summary
         val tvSetsSummary = TextView(this).apply {
             id = View.generateViewId()
-            text = "(%d - %d)".format(result.sets1, result.sets2)
-            setTextColor(ContextCompat.getColor(context, R.color.player_name))
+            text = buildMatchScoreSpannable(result.sets1, result.sets2)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            alpha = 0.8f
+            alpha = 0.9f
             gravity = Gravity.CENTER
         }
         headerLayout.addView(tvSetsSummary)
@@ -247,6 +246,29 @@ class PointDetailsActivity : AppCompatActivity() {
             addSetHeaderWithStats(index + 1, p1S, p2S, result.player1Name, result.player2Name, result.winner)
             addPointsProgression(pointsStr, result.player1Name, result.player2Name, setWinner, setFirstServer)
         }
+    }
+
+    private fun buildMatchScoreSpannable(sets1: Int, sets2: Int): CharSequence {
+        val builder = SpannableStringBuilder("(")
+        val blueColor = ContextCompat.getColor(this, R.color.sets_text)
+        val normalColor = ContextCompat.getColor(this, R.color.player_name)
+        
+        // Score 1
+        val start1 = builder.length
+        builder.append(sets1.toString())
+        if (sets1 > sets2) builder.setSpan(ForegroundColorSpan(blueColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        else builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        
+        builder.append(" - ")
+        
+        // Score 2
+        val start2 = builder.length
+        builder.append(sets2.toString())
+        if (sets2 > sets1) builder.setSpan(ForegroundColorSpan(blueColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        else builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        
+        builder.append(")")
+        return builder
     }
 
     private fun buildAllSetsSpannable(setResultsJson: String): CharSequence {
@@ -396,6 +418,12 @@ class PointDetailsActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
+        var finalS1 = 0
+        var finalS2 = 0
+        pointsStr.forEach { char ->
+            if (char == '1') finalS1++ else if (char == '2') finalS2++
+        }
+
         // Labels Column - Set winner on top
         val labelsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -410,11 +438,15 @@ class PointDetailsActivity : AppCompatActivity() {
         
         labelsLayout.addView(createLabelRow(
             if (topPlayer == 1) p1Name else p2Name, 
-            topPlayer == setFirstServer
+            topPlayer == setFirstServer,
+            if (topPlayer == 1) finalS1 else finalS2,
+            if (topPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
         ))
         labelsLayout.addView(createLabelRow(
             if (bottomPlayer == 1) p1Name else p2Name, 
-            bottomPlayer == setFirstServer
+            bottomPlayer == setFirstServer,
+            if (bottomPlayer == 1) finalS1 else finalS2,
+            if (bottomPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
         ))
         container.addView(labelsLayout)
 
@@ -479,21 +511,21 @@ class PointDetailsActivity : AppCompatActivity() {
     }
 
 
-    private fun createLabelRow(name: String, isFirstServer: Boolean): View {
+    private fun createLabelRow(name: String, isFirstServer: Boolean, setScore: Int, isWinner: Boolean): View {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(140.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            // Increased width to 170dp to prevent name truncation while keeping scores aligned
+            layoutParams = LinearLayout.LayoutParams(170.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
             setPadding(0, 2.dp(), 0, 2.dp())
 
-            // Ball icon - positioned to the far left
+            // Ball icon
             val ivBall = ImageView(this@PointDetailsActivity).apply {
                 val size = (12 * resources.displayMetrics.density).toInt()
                 layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                    marginEnd = 12.dp() // Increased space between ball and name
+                    marginEnd = 8.dp() 
                 }
                 setImageResource(R.drawable.stigaperform40size128)
-                // Use INVISIBLE so it still takes up space, keeping names aligned
                 visibility = if (isFirstServer) View.VISIBLE else View.INVISIBLE
             }
             addView(ivBall)
@@ -509,6 +541,20 @@ class PointDetailsActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             addView(tvName)
+
+            // Final Score - Highlight winner in blue
+            val tvScore = TextView(this@PointDetailsActivity).apply {
+                val formattedScore = if (setScore < 10) "[ %d]".format(setScore) else "[%d]".format(setScore)
+                text = formattedScore
+                val scoreColor = if (isWinner) ContextCompat.getColor(context, R.color.sets_text) 
+                                 else ContextCompat.getColor(context, R.color.player_name)
+                setTextColor(scoreColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                typeface = android.graphics.Typeface.MONOSPACE
+                includeFontPadding = false
+                setPadding(2.dp(), 0, 0, 0)
+            }
+            addView(tvScore)
         }
     }
 
