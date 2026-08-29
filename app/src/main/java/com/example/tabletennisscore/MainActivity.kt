@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Handler
 import android.text.InputFilter
+import android.text.Spanned
 import android.text.InputType
 import android.os.Bundle
 import android.os.Looper
@@ -509,7 +510,10 @@ class MainActivity : AppCompatActivity() {
             setText(currentName)
             if (currentName.isNotBlank()) selectAll()
             hint = getString(R.string.tournament_name_hint)
-            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_TOURNAMENT_NAME_LENGTH))
+            filters = arrayOf(
+                InputFilter.LengthFilter(GameViewModel.MAX_TOURNAMENT_NAME_LENGTH),
+                TitleCaseInputFilter()
+            )
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             imeOptions = EditorInfo.IME_ACTION_DONE
             maxLines = 1
@@ -545,7 +549,10 @@ class MainActivity : AppCompatActivity() {
                 selectAll()
             }
             hint = getString(R.string.dialog_hint_name)
-            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
+            filters = arrayOf(
+                InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH),
+                TitleCaseInputFilter()
+            )
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             imeOptions = EditorInfo.IME_ACTION_DONE
             maxLines = 1
@@ -796,5 +803,32 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
+    }
+
+    /**
+     * Input filter that ensures words are capitalized.
+     * Useful when the keyboard ignores standard capitalization flags.
+     */
+    private class TitleCaseInputFilter : InputFilter {
+        override fun filter(
+            source: CharSequence, start: Int, end: Int,
+            dest: Spanned, dstart: Int, dend: Int
+        ): CharSequence? {
+            if (source.isEmpty()) return null
+
+            val result = StringBuilder()
+            for (i in start until end) {
+                val char = source[i]
+                val isFirstChar = (dstart + i - start) == 0
+                val isAfterSpace = !isFirstChar && (if (i > start) source[i - 1] == ' ' else dest[dstart + i - start - 1] == ' ')
+
+                if (isFirstChar || isAfterSpace) {
+                    result.append(char.uppercaseChar())
+                } else {
+                    result.append(char)
+                }
+            }
+            return if (result.toString() == source.subSequence(start, end).toString()) null else result
+        }
     }
 }

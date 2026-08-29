@@ -14,4 +14,7 @@
     <color name="summary_winner_text">#CE7BA3FD</color>
     <color name="summary_loser_text">#5A5F68</color>
     <color name="history_loser_text">#7A808A</color>
+    <color name="win_vibrant">#42A5F5</color>
+    <color name="loss_muted">#4A4E69</color>
+    <color name="loss_vibrant">#EF5350</color>
 </resources>

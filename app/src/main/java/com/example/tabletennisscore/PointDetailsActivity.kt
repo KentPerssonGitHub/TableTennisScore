@@ -142,7 +142,7 @@ class PointDetailsActivity : AppCompatActivity() {
         // Sets Summary
         val tvSetsSummary = TextView(this).apply {
             id = View.generateViewId()
-            text = buildMatchScoreSpannable(result.sets1, result.sets2)
+            text = buildMatchScoreSpannable(result.sets1, result.sets2, result.winner)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             alpha = 0.9f
             gravity = Gravity.CENTER
@@ -152,7 +152,7 @@ class PointDetailsActivity : AppCompatActivity() {
         // All Sets Scores Summary
         val tvAllSetsSummary = TextView(this).apply {
             id = View.generateViewId()
-            text = buildAllSetsSpannable(result.setResultsJson)
+            text = buildAllSetsSpannable(result.setResultsJson, result.winner)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             alpha = 0.9f
             gravity = Gravity.CENTER
@@ -241,39 +241,48 @@ class PointDetailsActivity : AppCompatActivity() {
 
         setsPoints.forEachIndexed { index, pointsStr ->
             val (p1S, p2S) = setStats[index]
-            val setWinner = if (pointsStr.endsWith('1')) 1 else 2
             val setFirstServer = currentSetFirstServer(index, result.matchFirstServer)
             addSetHeaderWithStats(index + 1, p1S, p2S, result.player1Name, result.player2Name, result.winner)
-            addPointsProgression(pointsStr, result.player1Name, result.player2Name, setWinner, setFirstServer)
+            addPointsProgression(pointsStr, result.player1Name, result.player2Name, result.winner, setFirstServer)
         }
     }
 
-    private fun buildMatchScoreSpannable(sets1: Int, sets2: Int): CharSequence {
+    private fun buildMatchScoreSpannable(sets1: Int, sets2: Int, matchWinner: Int): CharSequence {
         val builder = SpannableStringBuilder("(")
-        val blueColor = ContextCompat.getColor(this, R.color.sets_text)
+        val winColor = ContextCompat.getColor(this, R.color.win_vibrant)
+        val lossColor = ContextCompat.getColor(this, R.color.loss_vibrant)
         val normalColor = ContextCompat.getColor(this, R.color.player_name)
         
         // Score 1
         val start1 = builder.length
         builder.append(sets1.toString())
-        if (sets1 > sets2) builder.setSpan(ForegroundColorSpan(blueColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        else builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (sets1 > 0) {
+            val color = if (matchWinner == 1) winColor else lossColor
+            builder.setSpan(ForegroundColorSpan(color), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } else {
+            builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
         
         builder.append(" - ")
         
         // Score 2
         val start2 = builder.length
         builder.append(sets2.toString())
-        if (sets2 > sets1) builder.setSpan(ForegroundColorSpan(blueColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        else builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (sets2 > 0) {
+            val color = if (matchWinner == 2) winColor else lossColor
+            builder.setSpan(ForegroundColorSpan(color), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } else {
+            builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
         
         builder.append(")")
         return builder
     }
 
-    private fun buildAllSetsSpannable(setResultsJson: String): CharSequence {
+    private fun buildAllSetsSpannable(setResultsJson: String, matchWinner: Int): CharSequence {
         val builder = SpannableStringBuilder("(")
-        val blueColor = ContextCompat.getColor(this, R.color.sets_text)
+        val winColor = ContextCompat.getColor(this, R.color.win_vibrant)
+        val lossColor = ContextCompat.getColor(this, R.color.loss_vibrant)
         val normalColor = ContextCompat.getColor(this, R.color.score_text)
         
         val sets = setResultsJson.split(",").filter { it.isNotBlank() }
@@ -286,16 +295,24 @@ class PointDetailsActivity : AppCompatActivity() {
                 // Score 1
                 val start1 = builder.length
                 builder.append(s1.toString())
-                if (s1 > s2) builder.setSpan(ForegroundColorSpan(blueColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-                else builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (s1 > s2) {
+                    val color = if (matchWinner == 1) winColor else lossColor
+                    builder.setSpan(ForegroundColorSpan(color), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                } else {
+                    builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
                 
                 builder.append(" - ")
                 
                 // Score 2
                 val start2 = builder.length
                 builder.append(s2.toString())
-                if (s2 > s1) builder.setSpan(ForegroundColorSpan(blueColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-                else builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (s2 > s1) {
+                    val color = if (matchWinner == 2) winColor else lossColor
+                    builder.setSpan(ForegroundColorSpan(color), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                } else {
+                    builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
             }
             if (i < sets.size - 1) builder.append(", ")
         }
@@ -411,7 +428,7 @@ class PointDetailsActivity : AppCompatActivity() {
         binding.layoutPointsContainer.addView(headerLayout)
     }
 
-    private fun addPointsProgression(pointsStr: String, p1Name: String, p2Name: String, setWinner: Int, setFirstServer: Int) {
+    private fun addPointsProgression(pointsStr: String, p1Name: String, p2Name: String, matchWinner: Int, setFirstServer: Int) {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(8.dp(), 0, 8.dp(), 12.dp())
@@ -424,7 +441,7 @@ class PointDetailsActivity : AppCompatActivity() {
             if (char == '1') finalS1++ else if (char == '2') finalS2++
         }
 
-        // Labels Column - Set winner on top
+        // Labels Column - Match winner on top for all sets
         val labelsLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -433,8 +450,8 @@ class PointDetailsActivity : AppCompatActivity() {
             ).apply { marginEnd = 8.dp() }
         }
         
-        val topPlayer = if (setWinner == 1) 1 else 2
-        val bottomPlayer = if (setWinner == 1) 2 else 1
+        val topPlayer = if (matchWinner == 1) 1 else 2
+        val bottomPlayer = if (matchWinner == 1) 2 else 1
         
         labelsLayout.addView(createLabelRow(
             if (topPlayer == 1) p1Name else p2Name, 
@@ -467,7 +484,8 @@ class PointDetailsActivity : AppCompatActivity() {
         var s1 = 0
         var s2 = 0
         var deuceReached = false
-        pointsStr.forEach { char ->
+        pointsStr.forEachIndexed { index, char ->
+            val isLast = index == pointsStr.length - 1
             val pointWinner = if (char == '1') 1 else 2
             if (pointWinner == 1) s1++ else s2++
 
@@ -478,16 +496,18 @@ class PointDetailsActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { marginEnd = 12.dp() }
+                ).apply { 
+                    marginEnd = if (isLast) 24.dp() else 12.dp() 
+                }
             }
             
-            // Set winner row score on top
-            if (setWinner == 1) {
-                col.addView(createScoreTextView(s1.toString(), pointWinner == 1))
-                col.addView(createScoreTextView(s2.toString(), pointWinner == 2))
+            // Match winner row score on top
+            if (matchWinner == 1) {
+                col.addView(createScoreTextView(s1.toString(), pointWinner == 1, isLast))
+                col.addView(createScoreTextView(s2.toString(), pointWinner == 2, isLast))
             } else {
-                col.addView(createScoreTextView(s2.toString(), pointWinner == 2))
-                col.addView(createScoreTextView(s1.toString(), pointWinner == 1))
+                col.addView(createScoreTextView(s2.toString(), pointWinner == 2, isLast))
+                col.addView(createScoreTextView(s1.toString(), pointWinner == 1, isLast))
             }
             scoresLayout.addView(col)
 
@@ -515,8 +535,8 @@ class PointDetailsActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            // Increased width to 170dp to prevent name truncation while keeping scores aligned
-            layoutParams = LinearLayout.LayoutParams(170.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            // Increased width to 185dp to accommodate larger scores
+            layoutParams = LinearLayout.LayoutParams(185.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
             setPadding(0, 2.dp(), 0, 2.dp())
 
             // Ball icon
@@ -546,29 +566,40 @@ class PointDetailsActivity : AppCompatActivity() {
             val tvScore = TextView(this@PointDetailsActivity).apply {
                 val formattedScore = if (setScore < 10) "[ %d]".format(setScore) else "[%d]".format(setScore)
                 text = formattedScore
-                val scoreColor = if (isWinner) ContextCompat.getColor(context, R.color.sets_text) 
-                                 else ContextCompat.getColor(context, R.color.player_name)
+                val scoreColor = if (isWinner) ContextCompat.getColor(context, R.color.win_vibrant) 
+                                 else ContextCompat.getColor(context, R.color.loss_muted)
                 setTextColor(scoreColor)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) // Increased from 12f
                 typeface = android.graphics.Typeface.MONOSPACE
                 includeFontPadding = false
-                setPadding(2.dp(), 0, 0, 0)
+                setPadding(4.dp(), 0, 0, 0)
             }
             addView(tvScore)
         }
     }
 
-    private fun createScoreTextView(text: String, isPointWinner: Boolean): TextView {
+    private fun createScoreTextView(text: String, isPointWinner: Boolean, isLastPoint: Boolean): TextView {
         return TextView(this).apply {
             this.text = text
-            if (isPointWinner) {
-                setTextColor(ContextCompat.getColor(context, R.color.sets_text))
+            if (isLastPoint) {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
                 setTypeface(null, android.graphics.Typeface.BOLD)
+                if (isPointWinner) {
+                    setTextColor(ContextCompat.getColor(context, R.color.sets_text))
+                } else {
+                    setTextColor(ContextCompat.getColor(context, R.color.score_text))
+                    alpha = 0.9f
+                }
             } else {
-                setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
-                setTypeface(null, android.graphics.Typeface.NORMAL)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                if (isPointWinner) {
+                    setTextColor(ContextCompat.getColor(context, R.color.sets_text))
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                } else {
+                    setTextColor(ContextCompat.getColor(context, R.color.history_loser_text))
+                    setTypeface(null, android.graphics.Typeface.NORMAL)
+                }
             }
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 2.dp(), 0, 2.dp())
             gravity = Gravity.CENTER
             minWidth = 20.dp()

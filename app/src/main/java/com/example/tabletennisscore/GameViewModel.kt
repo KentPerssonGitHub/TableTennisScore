@@ -1,6 +1,7 @@
 package com.example.tabletennisscore
 
 import android.app.Application
+import android.content.Context
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -25,6 +26,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         const val MAX_PLAYER_NAME_LENGTH = 13
         const val MAX_TOURNAMENT_NAME_LENGTH = 40
+        private const val PREFS_NAME = "table_tennis_prefs"
+        private const val KEY_PLAYER1_NAME = "p1_name"
+        private const val KEY_PLAYER2_NAME = "p2_name"
+        private const val KEY_TOURNAMENT_NAME = "tournament_name"
     }
 
     data class GameState(
@@ -49,7 +54,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val tournamentName: String = "",
     )
 
-    private val _state = MutableLiveData(GameState())
+    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _state = MutableLiveData(GameState(
+        player1Name = prefs.getString(KEY_PLAYER1_NAME, "Player 1") ?: "Player 1",
+        player2Name = prefs.getString(KEY_PLAYER2_NAME, "Player 2") ?: "Player 2",
+        tournamentName = prefs.getString(KEY_TOURNAMENT_NAME, "") ?: ""
+    ))
     val state: LiveData<GameState> = _state
 
     // History stack for undo support (max 50 entries)
@@ -344,11 +355,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         elapsedPlayedMs = 0L
         runningSinceMs = null
         val validatedBestOf = if (bestOfSets in setOf(1, 3, 5, 7)) bestOfSets else 5
+        
+        val sP1Name = sanitizePlayerName(player1Name, "Player 1")
+        val sP2Name = sanitizePlayerName(player2Name, "Player 2")
+        
+        prefs.edit()
+            .putString(KEY_PLAYER1_NAME, sP1Name)
+            .putString(KEY_PLAYER2_NAME, sP2Name)
+            .apply()
+
         _state.value = GameState(
             bestOfSets = validatedBestOf,
             server = matchFirstServer,
-            player1Name = sanitizePlayerName(player1Name, "Player 1"),
-            player2Name = sanitizePlayerName(player2Name, "Player 2"),
+            player1Name = sP1Name,
+            player2Name = sP2Name,
             tournamentName = current.tournamentName,
             isMatchRunning = false,
             hasMatchStarted = false,
@@ -357,12 +377,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPlayerName(player: Int, name: String) {
         val trimmed = sanitizePlayerName(name, if (player == 1) "Player 1" else "Player 2")
-        _state.value = if (player == 1) current.copy(player1Name = trimmed)
-                       else current.copy(player2Name = trimmed)
+        _state.value = if (player == 1) {
+            prefs.edit().putString(KEY_PLAYER1_NAME, trimmed).apply()
+            current.copy(player1Name = trimmed)
+        } else {
+            prefs.edit().putString(KEY_PLAYER2_NAME, trimmed).apply()
+            current.copy(player2Name = trimmed)
+        }
     }
 
     fun setTournamentName(name: String) {
-        _state.value = current.copy(tournamentName = sanitizeTournamentName(name))
+        val sanitized = sanitizeTournamentName(name)
+        prefs.edit().putString(KEY_TOURNAMENT_NAME, sanitized).apply()
+        _state.value = current.copy(tournamentName = sanitized)
     }
 
     private fun sanitizePlayerName(name: String, fallback: String): String {
@@ -377,6 +404,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun normalizeNameInput(value: String): String {
         return value.trim().replace(Regex("\\s+"), " ")
+            .split(" ")
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { word -> 
+                word.replaceFirstChar { it.uppercase() } 
+            }
     }
 
     /** Persists the finished match to the database. Call after [captureElapsedUntilNow]. */
