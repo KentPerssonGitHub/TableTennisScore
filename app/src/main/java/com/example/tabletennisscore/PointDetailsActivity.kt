@@ -247,24 +247,26 @@ class PointDetailsActivity : AppCompatActivity() {
         val lossColor = ContextCompat.getColor(this, R.color.loss_vibrant)
         val normalColor = ContextCompat.getColor(this, R.color.player_name)
         
-        // Score 1
+        // Match winner score always on the left
+        val leftSets = if (matchWinner == 1) sets1 else sets2
+        val rightSets = if (matchWinner == 1) sets2 else sets1
+        
+        // Score 1 (Winner)
         val start1 = builder.length
-        builder.append(sets1.toString())
-        if (sets1 > 0) {
-            val color = if (matchWinner == 1) winColor else lossColor
-            builder.setSpan(ForegroundColorSpan(color), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        builder.append(leftSets.toString())
+        if (leftSets > 0) {
+            builder.setSpan(ForegroundColorSpan(winColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         } else {
             builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         
         builder.append(" - ")
         
-        // Score 2
+        // Score 2 (Loser)
         val start2 = builder.length
-        builder.append(sets2.toString())
-        if (sets2 > 0) {
-            val color = if (matchWinner == 2) winColor else lossColor
-            builder.setSpan(ForegroundColorSpan(color), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        builder.append(rightSets.toString())
+        if (rightSets > 0) {
+            builder.setSpan(ForegroundColorSpan(lossColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         } else {
             builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
@@ -283,15 +285,21 @@ class PointDetailsActivity : AppCompatActivity() {
         sets.forEachIndexed { i, s ->
             val parts = s.split("-")
             if (parts.size == 2) {
-                val s1 = parts[0].toIntOrNull() ?: 0
-                val s2 = parts[1].toIntOrNull() ?: 0
+                val rawS1 = parts[0].toIntOrNull() ?: 0
+                val rawS2 = parts[1].toIntOrNull() ?: 0
+                
+                // Match winner score always on the left
+                val leftScore = if (matchWinner == 1) rawS1 else rawS2
+                val rightScore = if (matchWinner == 1) rawS2 else rawS1
                 
                 // Score 1
                 val start1 = builder.length
-                builder.append(s1.toString())
-                if (s1 > s2) {
-                    val color = if (matchWinner == 1) winColor else lossColor
-                    builder.setSpan(ForegroundColorSpan(color), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.append(leftScore.toString())
+                if (leftScore > rightScore) {
+                    builder.setSpan(ForegroundColorSpan(winColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                } else if (rightScore > leftScore) {
+                    // Match winner lost this set
+                    builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 } else {
                     builder.setSpan(ForegroundColorSpan(normalColor), start1, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
@@ -300,10 +308,9 @@ class PointDetailsActivity : AppCompatActivity() {
                 
                 // Score 2
                 val start2 = builder.length
-                builder.append(s2.toString())
-                if (s2 > s1) {
-                    val color = if (matchWinner == 2) winColor else lossColor
-                    builder.setSpan(ForegroundColorSpan(color), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.append(rightScore.toString())
+                if (rightScore > leftScore) {
+                    builder.setSpan(ForegroundColorSpan(lossColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 } else {
                     builder.setSpan(ForegroundColorSpan(normalColor), start2, builder.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
@@ -315,7 +322,7 @@ class PointDetailsActivity : AppCompatActivity() {
     }
 
     private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {
-        return if (s1 >= 10 && s2 >= 10) {
+        return if ((s1 >= 10 && s2 >= 10)) {
             val pointsSinceDeuce = (s1 - 10) + (s2 - 10)
             if (pointsSinceDeuce % 2 == 0) firstServer else otherPlayer(firstServer)
         } else {
@@ -332,7 +339,7 @@ class PointDetailsActivity : AppCompatActivity() {
 
     private data class ServeStats(
         var pointsWonOnServe: Int = 0,
-        var totalServes: Int = 0
+        var totalServes: Int = 0,
     ) {
         val percentage: Double
             get() = if (totalServes > 0) (pointsWonOnServe.toDouble() / totalServes * 100) else 0.0
@@ -447,18 +454,22 @@ class PointDetailsActivity : AppCompatActivity() {
         val topPlayer = if (matchWinner == 1) 1 else 2
         val bottomPlayer = if (matchWinner == 1) 2 else 1
         
-        labelsLayout.addView(createLabelRow(
-            if (topPlayer == 1) p1Name else p2Name, 
-            topPlayer == setFirstServer,
-            if (topPlayer == 1) finalS1 else finalS2,
-            if (topPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
-        ))
-        labelsLayout.addView(createLabelRow(
-            if (bottomPlayer == 1) p1Name else p2Name, 
-            bottomPlayer == setFirstServer,
-            if (bottomPlayer == 1) finalS1 else finalS2,
-            if (bottomPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
-        ))
+        labelsLayout.addView(
+            createLabelRow(
+                if (topPlayer == 1) p1Name else p2Name, 
+                topPlayer == setFirstServer,
+                if (topPlayer == 1) finalS1 else finalS2,
+                if (topPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
+            )
+        )
+        labelsLayout.addView(
+            createLabelRow(
+                if (bottomPlayer == 1) p1Name else p2Name, 
+                bottomPlayer == setFirstServer,
+                if (bottomPlayer == 1) finalS1 else finalS2,
+                if (bottomPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
+            )
+        )
         container.addView(labelsLayout)
 
         // Scrollable Scores
