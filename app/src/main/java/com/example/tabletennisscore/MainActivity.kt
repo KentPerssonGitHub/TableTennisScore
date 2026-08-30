@@ -268,14 +268,16 @@ class MainActivity : AppCompatActivity() {
                 binding.btnUndoText.visibility = View.GONE
                 binding.dividerUndoTop.visibility = View.GONE
                 
-                binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
-                binding.dividerStartTop.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
-                binding.btnSetupMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
-                binding.dividerSetupTop.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
-                binding.btnHistory.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
-                binding.dividerHistoryTop.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                // Show Start/Resume, Setup, and History when not running, unless awaiting swap
+                val showControls = !isAwaitingSwapConfirm
+                binding.btnStartMatch.visibility = if (showControls) View.VISIBLE else View.GONE
+                binding.dividerStartTop.visibility = if (showControls) View.VISIBLE else View.GONE
+                binding.btnSetupMatch.visibility = if (showControls) View.VISIBLE else View.GONE
+                binding.dividerSetupTop.visibility = if (showControls) View.VISIBLE else View.GONE
+                binding.btnHistory.visibility = if (showControls) View.VISIBLE else View.GONE
+                binding.dividerHistoryTop.visibility = if (showControls) View.VISIBLE else View.GONE
                 
-                binding.centerControlsRow.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                binding.centerControlsRow.visibility = if (showControls) View.VISIBLE else View.GONE
                 binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()
@@ -324,12 +326,14 @@ class MainActivity : AppCompatActivity() {
             binding.tvMatchTimer.visibility = View.VISIBLE
             return
         }
-        // tvMatchSummaryWinner should have bigger margin at start and end, and the text should be bigger.
         val winnerName = if (state.matchWinner == 1) state.player1Name else state.player2Name
         val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
+        
         binding.matchSummaryPanel.visibility = View.VISIBLE
         binding.tvMatchTimer.visibility = View.GONE
-        // make winner text in center if dialog
+        // Hide the controls while the summary is showing to avoid clutter
+        binding.centerControlsRow.visibility = View.GONE
+        
         binding.tvMatchSummaryWinner.text = getString(R.string.match_summary_winner, winnerName)
         binding.tvMatchSummaryWinner.setTextColor(winnerColor)
         renderMatchSummaryScoreTable(state)
@@ -343,41 +347,33 @@ class MainActivity : AppCompatActivity() {
         val margin = (12 * resources.displayMetrics.density).toInt()
         ConstraintSet().apply {
             clone(binding.rootLayout)
-
-            // Rensa gamla horisontella begränsningar
             clear(R.id.matchSummaryPanel, ConstraintSet.START)
             clear(R.id.matchSummaryPanel, ConstraintSet.END)
-
-            // Centrera horisontellt mot föräldralayouten (Parent)
             constrainWidth(R.id.matchSummaryPanel, ConstraintSet.WRAP_CONTENT)
             connect(R.id.matchSummaryPanel, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin)
             connect(R.id.matchSummaryPanel, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin)
-
-            // Centrera vertikalt mot föräldralayouten (Parent)
             clear(R.id.matchSummaryPanel, ConstraintSet.TOP)
             clear(R.id.matchSummaryPanel, ConstraintSet.BOTTOM)
             connect(R.id.matchSummaryPanel, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP, margin)
             connect(R.id.matchSummaryPanel, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, margin)
-
             applyTo(binding.rootLayout)
         }
 
-        // Skapa en gemensam stängningsfunktion
         val closeBox = {
             binding.matchSummaryPanel.visibility = View.GONE
             binding.tvMatchTimer.visibility = View.VISIBLE
-
-            // Rensa lyssnarna så de inte ligger aktiva under spelets gång
-            binding.rootLayout.setOnClickListener(null)
-            binding.matchSummaryPanel.setOnClickListener(null)
+            // Show the "pillars" (controls) again
+            binding.centerControlsRow.visibility = View.VISIBLE
+            // Reset match so scores are 0-0 and "Start Match" is shown for next game
+            viewModel.resetMatch()
         }
 
-        // Tvinga layouten att bli klickbar (viktigt om den saknar bakgrund)
-        binding.rootLayout.isClickable = true
-
-        // Stäng oavsett om man klickar på bakgrunden eller på själva rutan
-        binding.rootLayout.setOnClickListener { closeBox() }
+        // Dismiss when tapping the summary panel itself
         binding.matchSummaryPanel.setOnClickListener { closeBox() }
+        
+        // Remove full-screen click listeners to prevent accidental dismissal outside
+        binding.rootLayout.setOnClickListener(null)
+        binding.rootLayout.isClickable = false
     }
 
     private fun renderMatchSummaryScoreTable(state: GameViewModel.GameState) {
@@ -386,6 +382,7 @@ class MainActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
         val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
         val whiteColor = ContextCompat.getColor(this, android.R.color.white)
+        val dividerColor = ContextCompat.getColor(this, R.color.divider)
         fun Int.dp() = (this * density).toInt()
 
         // Ökad storlek på fyrkanten för set-vinster (från 24dp till 34dp)
@@ -441,6 +438,10 @@ class MainActivity : AppCompatActivity() {
             table.addView(TableRow(this).apply {
                 addView(cell(name, 30f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 120, marginStart = 12, marginEnd = 32))
                 addView(setCountCell(sets.toString(), isWinner))
+                
+                // Add vertical "pillar" separator
+                addView(cell("|", 24f, Gravity.CENTER, dividerColor, bold = true, marginEnd = 16))
+                
                 state.setResults.forEach { setResult ->
                     val playerScore = if (player == 1) setResult.first else setResult.second
                     val wonThisSet = if (player == 1) setResult.first > setResult.second else setResult.second > setResult.first

@@ -316,13 +316,16 @@
         android:id="@+id/matchSummaryPanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="#66000000"
+        android:background="#CC220000"
         android:orientation="vertical"
-        android:padding="10dp"
+        android:padding="16dp"
         android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
         app:layout_constrainedWidth="true"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/guidelineP1SummaryEnd"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <TextView
@@ -330,23 +333,26 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/score_text"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_gravity="center_horizontal" />
 
         <TableLayout
             android:id="@+id/tableMatchSummaryScores"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:id="@+id/tvMatchSummaryTime"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="8dp"
+            android:layout_gravity="center_horizontal"
             android:alpha="0.85"
             android:textColor="@color/score_text"
-            android:textSize="13sp" />
+            android:textSize="14sp" />
 
     </LinearLayout>
 
