@@ -64,64 +64,14 @@
         app:layout_constraintEnd_toEndOf="@id/tvScore1"
         android:layout_marginTop="12dp" />
 
-    <!-- ===== CENTER DIVIDER ===== -->
+    <!-- ===== CENTER ALIGNMENT GUIDELINE ===== -->
 
-    <View
+    <androidx.constraintlayout.widget.Guideline
         android:id="@+id/divider"
-        android:layout_width="2dp"
-        android:layout_height="0dp"
-        android:background="@color/divider"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <ImageView
-        android:id="@+id/ivRallyBall"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:src="@drawable/stigaperform40size128"
-        android:scaleType="fitCenter"
-        android:elevation="12dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Sets display in score area (center) -->
-    <TextView
-        android:id="@+id/tvSets"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:gravity="center"
-        android:padding="8dp"
-        android:text="0 - 0"
-        android:textColor="#F9F090"
-        android:textSize="68sp"
-        android:textStyle="normal"
-        app:layout_constraintEnd_toEndOf="@id/divider"
-        app:layout_constraintStart_toStartOf="@id/divider"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/ivSwapSides"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginTop="16dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/cd_swap_sides"
-        android:padding="2dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_swap_horiz"
-        android:tint="@color/player_name"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="@id/divider"
-        app:layout_constraintEnd_toEndOf="@id/divider" />
-
-    <!-- ===== RIGHT PLAYER (Player 2) ===== -->
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5" />
 
     <!-- Player 2 name (tap to edit) -->
     <TextView
@@ -179,74 +129,144 @@
 
     <!-- ===== CENTER CONTROLS ===== -->
 
-    <!-- Keep controls in a vertical row so buttons align top-to-bottom. -->
+    <!-- Keep controls in a vertical column with borders and dividers. -->
     <LinearLayout
         android:id="@+id/centerControlsRow"
-        android:layout_width="160dp"
+        android:layout_width="140dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:clickable="true"
-        android:focusable="true"
-        app:layout_constraintTop_toTopOf="@id/tvScore1"
-        app:layout_constraintBottom_toTopOf="@id/tvTournamentName"
+        android:background="@drawable/menu_column_background"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <com.google.android.material.button.MaterialButton
+        <View
+            android:id="@+id/dividerStartTop"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider" />
+
+        <TextView
             android:id="@+id/btnStartMatch"
-            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
             android:text="@string/btn_start_match"
-            android:textSize="14sp" />
+            android:textColor="@color/score_text"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSetupMatch"
-            style="@style/Widget.Material3.Button.TonalButton"
+        <View
+            android:id="@+id/dividerPauseTop"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:visibility="gone"
+            android:background="@color/divider" />
+
+        <TextView
+            android:id="@+id/btnPauseMatchText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
+            android:text="@string/btn_pause_match"
+            android:textColor="@color/score_text"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:visibility="gone"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <View
+            android:id="@+id/dividerSetupTop"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider" />
+
+        <TextView
+            android:id="@+id/btnSetupMatch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:text="@string/btn_setup_match"
-            android:textSize="14sp" />
+            android:textColor="@color/score_text"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <View
+            android:id="@+id/dividerUndoTop"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:visibility="gone"
+            android:background="@color/divider" />
+
+        <TextView
+            android:id="@+id/btnUndoText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_undo"
+            android:textColor="@color/score_text"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:visibility="gone"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <View
+            android:id="@+id/dividerHistoryTop"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider" />
 
 
-        <com.google.android.material.button.MaterialButton
+        <TextView
             android:id="@+id/btnHistory"
-            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/btn_history"
-            android:textSize="14sp" />
+            android:textColor="@color/score_text"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:paddingVertical="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <View
+            android:id="@+id/dividerBottom"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider" />
 
     </LinearLayout>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnUndo"
-        style="@style/Widget.Material3.Button.TonalButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="@string/btn_undo"
-        android:textSize="14sp"
         android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/btnPauseMatch" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnPauseMatch"
-        style="@style/Widget.Material3.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="@string/btn_pause_match"
-        android:textSize="16sp"
         android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/tvTournamentName" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextClock
         android:id="@+id/tvClock"
@@ -350,5 +370,54 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- ===== TOP LAYER (Z-ORDER) ===== -->
+
+    <!-- Sets display in score area (center) -->
+    <TextView
+        android:id="@+id/tvSets"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="0 - 0"
+        android:textColor="#F9F090"
+        android:textSize="68sp"
+        android:textStyle="normal"
+        android:elevation="4dp"
+        app:layout_constraintEnd_toEndOf="@id/divider"
+        app:layout_constraintStart_toStartOf="@id/divider"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/ivSwapSides"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="16dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/cd_swap_sides"
+        android:padding="2dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_swap_horiz"
+        android:tint="@color/player_name"
+        android:visibility="gone"
+        android:elevation="4dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="@id/divider"
+        app:layout_constraintEnd_toEndOf="@id/divider" />
+
+    <ImageView
+        android:id="@+id/ivRallyBall"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/stigaperform40size128"
+        android:scaleType="fitCenter"
+        android:elevation="12dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

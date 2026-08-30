@@ -1,7 +1,9 @@
 package com.example.tabletennisscore
 
+import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Intent
+import android.graphics.Color
 import android.os.Handler
 import android.text.InputFilter
 import android.text.Spanned
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var serveDragStartRawY = 0f
     private var lastShownDecidingSwapNoticeVersion = 0
     private var decidingSwapSnackbar: Snackbar? = null
+    private var previousIsMatchRunning = false
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerTick = object : Runnable {
         override fun run() {
@@ -119,8 +122,8 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnSetupMatch.setOnClickListener { confirmSetupMatch() }
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
-        binding.btnPauseMatch.setOnClickListener { viewModel.pauseMatch() }
-        binding.btnUndo.setOnClickListener { viewModel.undo() }
+        binding.btnPauseMatchText.setOnClickListener { viewModel.pauseMatch() }
+        binding.btnUndoText.setOnClickListener { viewModel.undo() }
         binding.btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
@@ -214,12 +217,26 @@ class MainActivity : AppCompatActivity() {
             binding.ivServe1.visibility = if (leftServing) View.VISIBLE else View.INVISIBLE
             binding.ivServe2.visibility = if (!leftServing) View.VISIBLE else View.INVISIBLE
 
-            val backgroundColor = when {
+            val backgroundColorRes = when {
                 state.isMatchRunning -> R.color.background_running
                 state.hasMatchStarted -> R.color.background_paused
                 else -> R.color.background
             }
-            binding.rootLayout.setBackgroundColor(ContextCompat.getColor(this, backgroundColor))
+            val targetColor = ContextCompat.getColor(this, backgroundColorRes)
+
+            if (state.isMatchRunning && !previousIsMatchRunning) {
+                // Flash effect: White -> Game Green
+                ValueAnimator.ofObject(ArgbEvaluator(), Color.WHITE, targetColor).apply {
+                    duration = 500L
+                    addUpdateListener { animator ->
+                        binding.rootLayout.setBackgroundColor(animator.animatedValue as Int)
+                    }
+                    start()
+                }
+            } else {
+                binding.rootLayout.setBackgroundColor(targetColor)
+            }
+            previousIsMatchRunning = state.isMatchRunning
 
             binding.btnStartMatch.text = getString(
                 if (state.hasMatchStarted) R.string.btn_resume_match else R.string.btn_start_match,
@@ -229,21 +246,37 @@ class MainActivity : AppCompatActivity() {
             val isAwaitingSwapConfirm = state.awaitingDecidingSetSwapConfirmation
 
             if (state.isMatchRunning) {
-                binding.btnPauseMatch.visibility = View.VISIBLE
+                binding.btnPauseMatchText.visibility = View.VISIBLE
+                binding.dividerPauseTop.visibility = View.VISIBLE
+                binding.btnUndoText.visibility = View.VISIBLE
+                binding.dividerUndoTop.visibility = View.VISIBLE
+                
                 binding.btnStartMatch.visibility = View.GONE
+                binding.dividerStartTop.visibility = View.GONE
                 binding.btnSetupMatch.visibility = View.GONE
-                binding.ivSwapSides.visibility = View.GONE
-                binding.btnUndo.visibility = View.VISIBLE
+                binding.dividerSetupTop.visibility = View.GONE
                 binding.btnHistory.visibility = View.GONE
+                binding.dividerHistoryTop.visibility = View.GONE
+                
+                binding.centerControlsRow.visibility = View.VISIBLE
+                binding.ivSwapSides.visibility = View.GONE
                 startRallyBallAnimationIfNeeded()
                 startMatchTimerTickerIfNeeded()
             } else {
-                binding.btnPauseMatch.visibility = View.GONE
+                binding.btnPauseMatchText.visibility = View.GONE
+                binding.dividerPauseTop.visibility = View.GONE
+                binding.btnUndoText.visibility = View.GONE
+                binding.dividerUndoTop.visibility = View.GONE
+                
                 binding.btnStartMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
-                binding.btnSetupMatch.visibility = View.VISIBLE
+                binding.dividerStartTop.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                binding.btnSetupMatch.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                binding.dividerSetupTop.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                binding.btnHistory.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                binding.dividerHistoryTop.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
+                
+                binding.centerControlsRow.visibility = if (isMatchFinished || isAwaitingSwapConfirm) View.GONE else View.VISIBLE
                 binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
-                binding.btnUndo.visibility = View.GONE
-                binding.btnHistory.visibility = View.VISIBLE
                 stopRallyBallAnimation()
                 stopMatchTimerTicker()
             }
