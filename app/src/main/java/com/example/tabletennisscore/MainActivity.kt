@@ -73,6 +73,11 @@ class MainActivity : AppCompatActivity() {
         observeState()
     }
 
+    override fun onStop() {
+        viewModel.saveMatchInProgress()
+        super.onStop()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
@@ -177,6 +182,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observeState() {
+        viewModel.ongoingMatchExists.observe(this) { exists ->
+            if (exists && !viewModel.hasRespondedToOngoingMatch && viewModel.state.value?.hasMatchStarted == false) {
+                showResumeMatchDialog()
+            }
+        }
+
         viewModel.state.observe(this) { state ->
             val p1OnLeft = !state.sidesSwapped
             binding.tvPlayer1Name.text = if (p1OnLeft) state.player1Name else state.player2Name
@@ -303,6 +314,20 @@ class MainActivity : AppCompatActivity() {
         timerHandler.removeCallbacks(timerTick)
     }
 
+    private fun showResumeMatchDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_resume_match_title)
+            .setMessage(R.string.dialog_resume_match_message)
+            .setPositiveButton(R.string.dialog_yes) { _, _ ->
+                viewModel.resumeMatch()
+            }
+            .setNegativeButton(R.string.dialog_no) { _, _ ->
+                viewModel.discardMatch()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
     private fun updateMatchTimerText() {
         val elapsed = viewModel.getElapsedPlayedMs()
         binding.tvMatchTimer.text = formatElapsedTime(elapsed)
@@ -386,7 +411,7 @@ class MainActivity : AppCompatActivity() {
         fun Int.dp() = (this * density).toInt()
 
         // Ökad storlek på fyrkanten för set-vinster (från 24dp till 34dp)
-        val setBoxSize = 34.dp()
+        val setBoxSize = 28.dp()
 
         // Höjda textstorlekar (från 15f till 20f) och bredder (minW)
         fun cell(
@@ -416,7 +441,7 @@ class MainActivity : AppCompatActivity() {
         // Set with red and blue bg
         fun setCountCell(text: String, winnerRow: Boolean) = TextView(this).apply {
             this.text = text
-            textSize = 30f  // 20f player wins names and set numbers
+            textSize = 20f  // 20f player wins names and set numbers
             gravity = Gravity.CENTER
             setTextColor(whiteColor)
             includeFontPadding = false
@@ -436,18 +461,18 @@ class MainActivity : AppCompatActivity() {
             val isWinner = player == state.matchWinner
             val nameColor = if (isWinner) winnerColor else whiteColor
             table.addView(TableRow(this).apply {
-                addView(cell(name, 30f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 120, marginStart = 12, marginEnd = 32))
+                addView(cell(name, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 90, marginStart = 12, marginEnd = 20))
                 addView(setCountCell(sets.toString(), isWinner))
                 
                 // Add vertical "pillar" separator
-                addView(cell("|", 24f, Gravity.CENTER, dividerColor, bold = true, marginEnd = 16))
+                addView(cell("|", 18f, Gravity.CENTER, dividerColor, bold = true, marginEnd = 16))
                 
                 state.setResults.forEach { setResult ->
                     val playerScore = if (player == 1) setResult.first else setResult.second
                     val wonThisSet = if (player == 1) setResult.first > setResult.second else setResult.second > setResult.first
                     val scoreColor = if (wonThisSet) winnerColor else whiteColor
                     // Set result and space between set numbers
-                    addView(cell(playerScore.toString(), 30f, Gravity.CENTER, scoreColor, bold = wonThisSet, minW = 36, marginEnd = 8))
+                    addView(cell(playerScore.toString(), 20f, Gravity.CENTER, scoreColor, bold = wonThisSet, minW = 28, marginEnd = 8))
                 }
             })
         }

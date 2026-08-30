@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.tabletennisscore.data.MatchDatabase
 import com.example.tabletennisscore.data.MatchResult
 import androidx.core.content.edit
+import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -33,6 +34,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_PLAYER1_NAME = "p1_name"
         private const val KEY_PLAYER2_NAME = "p2_name"
         private const val KEY_TOURNAMENT_NAME = "tournament_name"
+        private const val KEY_MATCH_IN_PROGRESS = "match_in_progress"
+        private const val KEY_MATCH_FIRST_SERVER = "match_first_server"
+        private const val KEY_ELAPSED_PLAYED_MS = "elapsed_played_ms"
     }
 
     data class GameState(
@@ -67,6 +71,64 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
     val state: LiveData<GameState> = _state
+
+    private val _ongoingMatchExists = MutableLiveData<Boolean>(false)
+    val ongoingMatchExists: LiveData<Boolean> = _ongoingMatchExists
+
+    var hasRespondedToOngoingMatch = false
+        private set
+
+    init {
+        if (prefs.contains(KEY_MATCH_IN_PROGRESS)) {
+            _ongoingMatchExists.value = true
+        }
+    }
+
+    fun resumeMatch() {
+        val json = prefs.getString(KEY_MATCH_IN_PROGRESS, null) ?: return
+        try {
+            val savedState = Gson().fromJson(json, GameState::class.java)
+            matchFirstServer = prefs.getInt(KEY_MATCH_FIRST_SERVER, 1)
+            elapsedPlayedMs = prefs.getLong(KEY_ELAPSED_PLAYED_MS, 0L)
+
+            // When resuming, we default to paused state
+            _state.value = savedState.copy(isMatchRunning = false)
+            _ongoingMatchExists.value = false
+            hasRespondedToOngoingMatch = true
+        } catch (e: Exception) {
+            clearSavedMatch()
+            _ongoingMatchExists.value = false
+            hasRespondedToOngoingMatch = true
+        }
+    }
+
+    fun discardMatch() {
+        clearSavedMatch()
+        _ongoingMatchExists.value = false
+        hasRespondedToOngoingMatch = true
+    }
+
+    fun clearSavedMatch() {
+        prefs.edit {
+            remove(KEY_MATCH_IN_PROGRESS)
+            remove(KEY_MATCH_FIRST_SERVER)
+            remove(KEY_ELAPSED_PLAYED_MS)
+        }
+    }
+
+    fun saveMatchInProgress() {
+        val s = current
+        if (s.hasMatchStarted && s.matchWinner == null) {
+            val json = Gson().toJson(s)
+            prefs.edit {
+                putString(KEY_MATCH_IN_PROGRESS, json)
+                putInt(KEY_MATCH_FIRST_SERVER, matchFirstServer)
+                putLong(KEY_ELAPSED_PLAYED_MS, getElapsedPlayedMs())
+            }
+        } else {
+            clearSavedMatch()
+        }
+    }
 
     // History stack for undo support (max 50 entries)
     private val history = ArrayDeque<GameState>(50)
@@ -192,11 +254,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             awaitingDecidingSetSwapConfirmation = awaitingDecidingSetSwapConfirmation,
             resumeAfterDecidingSetSwapConfirmation = resumeAfterDecidingSetSwapConfirmation,
         )
+        saveMatchInProgress()
     }
 
     fun undo() {
         if (history.isNotEmpty()) {
             _state.value = history.removeLast()
+            saveMatchInProgress()
         }
     }
 
@@ -205,6 +269,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         matchFirstServer = 1
         elapsedPlayedMs = 0L
         runningSinceMs = null
+        clearSavedMatch()
         _state.value = GameState(
             bestOfSets = current.bestOfSets,
             player1Name = current.player1Name,
@@ -223,6 +288,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             isMatchRunning = true,
             hasMatchStarted = true,
         )
+        saveMatchInProgress()
     }
 
     fun pauseMatch() {
@@ -231,6 +297,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             captureElapsedUntilNow()
         }
         _state.value = current.copy(isMatchRunning = false)
+        saveMatchInProgress()
     }
 
     fun getElapsedPlayedMs(nowMs: Long = SystemClock.elapsedRealtime()): Long {

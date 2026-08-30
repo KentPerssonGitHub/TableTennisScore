@@ -51,6 +51,8 @@
     <string name="tournament_name_hint">Enter tournament name</string>
     <string name="dialog_edit_tournament_name">Edit tournament name</string>
     <string name="cd_tournament_name">Tournament name, long press to edit</string>
+    <string name="dialog_resume_match_title">Resume Match?</string>
+    <string name="dialog_resume_match_message">An ongoing match was found. Would you like to resume it?</string>
 
     <!-- History screen -->
     <string name="btn_history">History</string>

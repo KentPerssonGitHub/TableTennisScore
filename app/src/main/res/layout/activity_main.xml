@@ -318,7 +318,7 @@
         android:layout_height="wrap_content"
         android:background="#CC220000"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="10dp"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
@@ -333,7 +333,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/score_text"
-            android:textSize="24sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:layout_gravity="center_horizontal" />
 
@@ -352,7 +352,7 @@
             android:layout_gravity="center_horizontal"
             android:alpha="0.85"
             android:textColor="@color/score_text"
-            android:textSize="14sp" />
+            android:textSize="12sp" />
 
     </LinearLayout>
 
