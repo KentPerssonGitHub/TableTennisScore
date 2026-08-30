@@ -14,7 +14,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.KeyEvent
-import android.view.animation.LinearInterpolator
 import android.view.MotionEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
@@ -46,8 +45,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: GameViewModel by viewModels()
-    private var rallyBallAnimator: ValueAnimator? = null
-    private var rallyBallSpinDirection = 1f
     private var serveDragStartRawX = 0f
     private var serveDragStartRawY = 0f
     private var lastShownDecidingSwapNoticeVersion = 0
@@ -76,6 +73,16 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         viewModel.saveMatchInProgress()
         super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.glRallyBall.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.glRallyBall.onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -486,12 +493,13 @@ class MainActivity : AppCompatActivity() {
     )
 
     private fun startRallyBallAnimationIfNeeded() {
-        if (rallyBallAnimator?.isRunning == true) return
         binding.rootLayout.post {
             val latestState = viewModel.state.value ?: return@post
-            if (!latestState.isMatchRunning) return@post
+            if (!latestState.isMatchRunning) {
+                binding.glRallyBall.renderer.isAnimating = false
+                return@post
+            }
 
-            val ball = binding.ivRallyBall
             val leftScore = binding.tvScore1
             val rightScore = binding.tvScore2
             val net = binding.divider
@@ -507,57 +515,37 @@ class MainActivity : AppCompatActivity() {
 
             val leftCenterX = dividerCenterX - halfTravel
             val rightCenterX = dividerCenterX + halfTravel
-            val leftX = leftCenterX - (ball.width / 2f)
-            val rightX = rightCenterX - (ball.width / 2f)
-            val horizontalTravel = rightX - leftX
-            if (horizontalTravel <= 0f) return@post
+            
+            val ballWidth = 20 * resources.displayMetrics.density
+            val ballHeight = 20 * resources.displayMetrics.density
+            
+            val leftX = leftCenterX - (ballWidth / 2f)
+            val rightX = rightCenterX - (ballWidth / 2f)
 
             val baseCenterY = (
                 (leftScore.y + (leftScore.height * 0.58f)) +
                     (rightScore.y + (rightScore.height * 0.58f))
                 ) / 2f
-            val baseY = baseCenterY - (ball.height / 2f)
+            val baseY = baseCenterY - (ballHeight / 2f)
             val netTopY = net.y + (net.height * 0.20f)
             val desiredArc = abs(rightX - leftX) * 0.20f
-            val minArcToClearNet = (baseY - netTopY) + ball.height
+            val minArcToClearNet = (baseY - netTopY) + ballHeight
             val arcHeight = maxOf(70f, minOf(220f, maxOf(desiredArc, minArcToClearNet)))
 
-            // Keep spin continuous and flip direction on each side bounce.
-            var lastT = 0f
-            var spinTurns = 0f
-            rallyBallSpinDirection = 1f
-            ball.rotation = 0f
-
-            ball.visibility = View.VISIBLE
-            rallyBallAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 1500L
-                repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
-                interpolator = LinearInterpolator()
-                addUpdateListener { animator ->
-                    val t = animator.animatedValue as Float
-                    if ((lastT < 0.02f && t >= 0.02f) || (lastT > 0.98f && t <= 0.98f)) {
-                        rallyBallSpinDirection *= -1f
-                    }
-                    lastT = t
-
-                    ball.x = leftX + (rightX - leftX) * t
-                    val netArc = sin(PI.toFloat() * t)
-                    ball.y = baseY - (arcHeight * netArc)
-
-                    spinTurns += 12f * rallyBallSpinDirection
-                    ball.rotation = spinTurns
-                }
-                start()
+            binding.glRallyBall.renderer.apply {
+                this.leftX = leftX
+                this.rightX = rightX
+                this.baseY = baseY
+                this.arcHeight = arcHeight
+                this.ballWidth = ballWidth
+                this.ballHeight = ballHeight
+                this.isAnimating = true
             }
         }
     }
 
     private fun stopRallyBallAnimation() {
-        rallyBallAnimator?.cancel()
-        rallyBallAnimator = null
-        binding.ivRallyBall.rotation = 0f
-        binding.ivRallyBall.visibility = View.GONE
+        binding.glRallyBall.renderer.isAnimating = false
     }
 
 

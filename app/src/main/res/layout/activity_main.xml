@@ -413,14 +413,10 @@
         app:layout_constraintStart_toStartOf="@id/divider"
         app:layout_constraintEnd_toEndOf="@id/divider" />
 
-    <ImageView
-        android:id="@+id/ivRallyBall"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:src="@drawable/stigaperform40size128"
-        android:scaleType="fitCenter"
-        android:elevation="12dp"
-        android:visibility="gone"
+    <com.example.tabletennisscore.RallyBallGLView
+        android:id="@+id/glRallyBall"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"

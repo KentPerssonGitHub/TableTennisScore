@@ -22,13 +22,10 @@
         android:gravity="center"
         android:orientation="horizontal" />
 
-    <ImageView
-        android:id="@+id/ivSplashBall"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:contentDescription="@null"
-        android:scaleType="fitCenter"
-        android:src="@drawable/stigaperform40size128" />
+    <com.example.tabletennisscore.RallyBallGLView
+        android:id="@+id/glSplashBall"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <TextView
         android:id="@+id/tvTapToContinue"

@@ -7,7 +7,6 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.animation.LinearInterpolator
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -27,8 +26,6 @@ class SplashActivity : AppCompatActivity() {
     private var hasContinued = false
     private var tapHintAnimator: ValueAnimator? = null
     private var titleAnimator: ValueAnimator? = null
-    private var splashBallAnimator: ValueAnimator? = null
-    private var splashBallSpinDirection = 1f
     private val titleLetterViews = mutableListOf<TextView>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,6 +56,16 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        findViewById<RallyBallGLView>(R.id.glSplashBall).onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        findViewById<RallyBallGLView>(R.id.glSplashBall).onPause()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
@@ -77,8 +84,6 @@ class SplashActivity : AppCompatActivity() {
         titleAnimator = null
         tapHintAnimator?.cancel()
         tapHintAnimator = null
-        splashBallAnimator?.cancel()
-        splashBallAnimator = null
         super.onDestroy()
     }
 
@@ -158,21 +163,19 @@ class SplashActivity : AppCompatActivity() {
 
     private fun startSplashBallAnimationWhenReady() {
         val rootView = findViewById<View>(R.id.splashRoot)
-        val ballView = findViewById<ImageView>(R.id.ivSplashBall)
+        val glView = findViewById<RallyBallGLView>(R.id.glSplashBall)
         rootView.post {
             if (isFinishing || isDestroyed) return@post
-            startSplashBallAnimation(rootView, ballView)
+            startSplashBallAnimation(rootView, glView)
         }
     }
 
-    private fun startSplashBallAnimation(rootView: View, ballView: ImageView) {
-        splashBallAnimator?.cancel()
-
-        val ballSize = ballView.width.takeIf { it > 0 }?.toFloat() ?: ballView.layoutParams.width.toFloat()
+    private fun startSplashBallAnimation(rootView: View, glView: RallyBallGLView) {
+        val ballSize = 20 * resources.displayMetrics.density
         val rootWidth = rootView.width.toFloat()
         val rootHeight = rootView.height.toFloat()
 
-        if (rootWidth <= 0f || rootHeight <= 0f || ballSize <= 0f) return
+        if (rootWidth <= 0f || rootHeight <= 0f) return
 
         val leftX = rootWidth * 0.3f
         val rightX = rootWidth * 0.7f - ballSize
@@ -183,34 +186,15 @@ class SplashActivity : AppCompatActivity() {
         val desiredArc = abs(horizontalTravel) * 0.20f
         val arcHeight = maxOf(70f, minOf(220f, desiredArc))
 
-        var lastT = 0f
-        var spinTurns = 0f
-
-        splashBallAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 1200L
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = LinearInterpolator()
-            addUpdateListener { animator ->
-                val t = animator.animatedValue as Float
-                if ((lastT < 0.02f && t >= 0.02f) || (lastT > 0.98f && t <= 0.98f)) {
-                    splashBallSpinDirection *= -1f
-                }
-                lastT = t
-
-                ballView.x = leftX + horizontalTravel * t
-                val netArc = sin(PI.toFloat() * t)
-                ballView.y = baseY - (arcHeight * netArc)
-
-                spinTurns += 12f * splashBallSpinDirection
-                ballView.rotation = spinTurns
-            }
-            start()
+        glView.renderer.apply {
+            this.leftX = leftX
+            this.rightX = rightX
+            this.baseY = baseY
+            this.arcHeight = arcHeight
+            this.ballWidth = ballSize
+            this.ballHeight = ballSize
+            this.isAnimating = true
         }
-
-        splashBallSpinDirection = 1f
-        ballView.rotation = 0f
-        ballView.visibility = View.VISIBLE
     }
 
     private fun continueToApp() {
@@ -218,9 +202,7 @@ class SplashActivity : AppCompatActivity() {
         hasContinued = true
         titleAnimator?.cancel()
         tapHintAnimator?.cancel()
-        splashBallAnimator?.cancel()
         titleAnimator = null
-        splashBallAnimator = null
         val intent = Intent(this, MainActivity::class.java)
         val options = ActivityOptions.makeCustomAnimation(
             this,
