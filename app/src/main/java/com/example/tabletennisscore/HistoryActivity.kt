@@ -1,18 +1,27 @@
 package com.example.tabletennisscore
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
+import android.graphics.Color
+import android.text.InputFilter
+import android.text.InputType
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import android.text.TextUtils
@@ -31,6 +40,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.tabletennisscore.data.MatchDatabase
 import com.example.tabletennisscore.data.MatchResult
 import com.example.tabletennisscore.databinding.ActivityHistoryBinding
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
@@ -46,6 +58,7 @@ class HistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHistoryBinding
     private val dao by lazy { MatchDatabase.getInstance(this).matchResultDao() }
+    private val appPrefs by lazy { getSharedPreferences("table_tennis_prefs", MODE_PRIVATE) }
     private val backupPrefs by lazy { getSharedPreferences("history_backup_prefs", MODE_PRIVATE) }
     private val lastBackupDisplayFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
 
@@ -271,18 +284,99 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun showEditMatchDetailsDialog(result: MatchResult) {
+        val nameGroup = loadPlayerNameGroup()
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val padding = (20 * resources.displayMetrics.density).toInt()
             setPadding(padding, padding, padding, 0)
         }
-        val p1Edit = EditText(this).apply {
+        val p1Edit = AutoCompleteTextView(this).apply {
             hint = getString(R.string.history_edit_player1)
             setText(result.player1Name)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
+            imeOptions = EditorInfo.IME_ACTION_NEXT
+            maxLines = 1
+            threshold = 0
         }
-        val p2Edit = EditText(this).apply {
+        val p2Edit = AutoCompleteTextView(this).apply {
             hint = getString(R.string.history_edit_player2)
             setText(result.player2Name)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            maxLines = 1
+            threshold = 0
+        }
+        if (nameGroup.isNotEmpty()) {
+            val namesAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, nameGroup)
+            p1Edit.setAdapter(namesAdapter)
+            p2Edit.setAdapter(namesAdapter)
+            p1Edit.setOnClickListener { p1Edit.showDropDown() }
+            p2Edit.setOnClickListener { p2Edit.showDropDown() }
+        }
+
+        val buttonDensity = resources.displayMetrics.density
+        fun buttonPx(dp: Int): Int = (dp * buttonDensity).toInt()
+
+        val selectFromGroupP1 = MaterialButton(this).apply {
+            text = getString(R.string.dialog_select_from_group)
+            isAllCaps = false
+            insetTop = 0
+            insetBottom = 0
+            minimumHeight = buttonPx(30)
+            minHeight = buttonPx(30)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(buttonPx(14), buttonPx(2), buttonPx(14), buttonPx(2))
+            setTextColor(ContextCompat.getColor(this@HistoryActivity, R.color.player_name))
+            strokeWidth = buttonPx(1)
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@HistoryActivity, R.color.history_loser_text))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = buttonPx(4)
+            }
+            isEnabled = nameGroup.isNotEmpty()
+            alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
+            setOnClickListener {
+                showPlayerNamePickerDialog(nameGroup, p1Edit.text.toString()) { selected ->
+                    p1Edit.setText(selected)
+                    p1Edit.setSelection(p1Edit.text.length)
+                }
+            }
+        }
+        val selectFromGroupP2 = MaterialButton(this).apply {
+            text = getString(R.string.dialog_select_from_group)
+            isAllCaps = false
+            insetTop = 0
+            insetBottom = 0
+            minimumHeight = buttonPx(30)
+            minHeight = buttonPx(30)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(buttonPx(14), buttonPx(2), buttonPx(14), buttonPx(2))
+            setTextColor(ContextCompat.getColor(this@HistoryActivity, R.color.player_name))
+            strokeWidth = buttonPx(1)
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@HistoryActivity, R.color.history_loser_text))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = buttonPx(4)
+                bottomMargin = buttonPx(8)
+            }
+            isEnabled = nameGroup.isNotEmpty()
+            alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
+            setOnClickListener {
+                showPlayerNamePickerDialog(nameGroup, p2Edit.text.toString()) { selected ->
+                    p2Edit.setText(selected)
+                    p2Edit.setSelection(p2Edit.text.length)
+                }
+            }
         }
         
         val roundLabel = TextView(this).apply {
@@ -299,24 +393,49 @@ class HistoryActivity : AppCompatActivity() {
             getString(R.string.round_final)
         )
         
-        val roundGrid = android.widget.GridLayout(this).apply {
-            columnCount = 4
-            setPadding(0, 8, 0, 8)
+        val density = resources.displayMetrics.density
+        fun px(dp: Int): Int = (dp * density).toInt()
+
+        val roundGroup = ChipGroup(this).apply {
+            isSingleSelection = true
+            isSelectionRequired = true
+            chipSpacingHorizontal = px(8)
+            chipSpacingVertical = px(8)
+            setPadding(0, 6, 0, 6)
         }
-        
-        val radioButtons = mutableListOf<RadioButton>()
+
+        var selectedRound = if (result.matchRound.isNotBlank()) result.matchRound else rounds.firstOrNull().orEmpty()
+        fun refreshRoundOutline() {
+            for (i in 0 until roundGroup.childCount) {
+                val chip = roundGroup.getChildAt(i) as? Chip ?: continue
+                val isSelected = (chip.tag as? String) == selectedRound
+                chip.chipBackgroundColor = ColorStateList.valueOf(Color.TRANSPARENT)
+                chip.chipStrokeWidth = if (isSelected) px(2).toFloat() else px(1).toFloat()
+                chip.chipStrokeColor = ColorStateList.valueOf(
+                    ContextCompat.getColor(this@HistoryActivity, if (isSelected) R.color.score_text else R.color.history_loser_text),
+                )
+                chip.setTextColor(
+                    ContextCompat.getColor(this@HistoryActivity, if (isSelected) R.color.score_text else R.color.player_name),
+                )
+            }
+        }
         rounds.forEach { round ->
-            val rb = RadioButton(this).apply {
+            val btn = Chip(this).apply {
+                id = View.generateViewId()
                 text = round
                 tag = round
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                isChecked = (result.matchRound == round)
-                setOnClickListener { view ->
-                    radioButtons.forEach { it.isChecked = (it == view) }
-                }
+                isCheckable = true
+                isChecked = (round == selectedRound)
+                isAllCaps = false
+                chipMinHeight = px(34).toFloat()
             }
-            radioButtons.add(rb)
-            roundGrid.addView(rb)
+            roundGroup.addView(btn)
+        }
+        refreshRoundOutline()
+        roundGroup.setOnCheckedStateChangeListener { group, checkedIds ->
+            val selectedId = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
+            selectedRound = (group.findViewById<Chip>(selectedId).tag as? String) ?: selectedRound
+            refreshRoundOutline()
         }
 
         val dataStatusLabel = TextView(this).apply {
@@ -346,36 +465,117 @@ class HistoryActivity : AppCompatActivity() {
         dataStatusLayout.addView(dataBadRb)
 
         layout.addView(p1Edit)
+        layout.addView(selectFromGroupP1)
         layout.addView(p2Edit)
+        layout.addView(selectFromGroupP2)
         layout.addView(roundLabel)
-        layout.addView(roundGrid)
+        layout.addView(roundGroup)
         layout.addView(dataStatusLabel)
         layout.addView(dataStatusLayout)
 
-        AlertDialog.Builder(this)
+        val scrollContent = ScrollView(this).apply {
+            addView(layout)
+        }
+
+        fun saveChanges(): Boolean {
+            val p1 = p1Edit.text.toString().trim()
+            val p2 = p2Edit.text.toString().trim()
+            val isDataValid = dataOkRb.isChecked
+            if (p1.isEmpty() || p2.isEmpty()) {
+                toast(getString(R.string.history_edit_names_required))
+                return false
+            }
+            savePlayerNamesToGroup(p1, p2)
+            lifecycleScope.launch {
+                dao.update(
+                    result.copy(
+                        player1Name = p1,
+                        player2Name = p2,
+                        matchRound = selectedRound,
+                        isDataValid = isDataValid,
+                    )
+                )
+            }
+            return true
+        }
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.history_match_details_title)
-            .setView(layout)
+            .setView(scrollContent)
+            .setPositiveButton(R.string.dialog_ok, null)
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .create()
+
+        dialog.setOnShowListener {
+            val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            okButton.setTextColor(ContextCompat.getColor(this, R.color.score_text))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                .setTextColor(ContextCompat.getColor(this, R.color.player_name))
+            okButton.setOnClickListener {
+                if (saveChanges()) dialog.dismiss()
+            }
+            p2Edit.setOnEditorActionListener { _, actionId, event ->
+                val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
+                if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                    okButton.performClick()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showPlayerNamePickerDialog(names: List<String>, current: String, onPicked: (String) -> Unit) {
+        if (names.isEmpty()) return
+        val checkedIndex = names.indexOfFirst { it.equals(current.trim(), ignoreCase = true) }
+        var selectedIndex = checkedIndex
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_select_from_group)
+            .setSingleChoiceItems(names.toTypedArray(), checkedIndex) { _, which ->
+                selectedIndex = which
+            }
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
-                val p1 = p1Edit.text.toString().trim()
-                val p2 = p2Edit.text.toString().trim()
-                val selectedRb = radioButtons.find { it.isChecked }
-                val selectedRound = selectedRb?.tag as? String ?: ""
-                val isDataValid = dataOkRb.isChecked
-                if (p1.isNotEmpty() && p2.isNotEmpty()) {
-                    lifecycleScope.launch {
-                        dao.update(
-                            result.copy(
-                                player1Name = p1,
-                                player2Name = p2,
-                                matchRound = selectedRound,
-                                isDataValid = isDataValid,
-                            )
-                        )
-                    }
+                if (selectedIndex in names.indices) {
+                    onPicked(names[selectedIndex])
                 }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
+    }
+
+    private fun loadPlayerNameGroup(): List<String> {
+        val raw = appPrefs.getString("player_name_group_json", null) ?: return emptyList()
+        return try {
+            gson.fromJson(raw, Array<String>::class.java)
+                ?.toList()
+                .orEmpty()
+                .map { normalizePlayerNameForGroup(it) }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase(Locale.ROOT) }
+                .sortedBy { it.lowercase(Locale.ROOT) }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun savePlayerNamesToGroup(vararg names: String) {
+        val merged = (loadPlayerNameGroup() + names.toList())
+            .map { normalizePlayerNameForGroup(it) }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedBy { it.lowercase(Locale.ROOT) }
+        appPrefs.edit().putString("player_name_group_json", gson.toJson(merged)).apply()
+    }
+
+    private fun normalizePlayerNameForGroup(value: String): String {
+        return value.trim()
+            .replace(Regex("\\s+"), " ")
+            .split(" ")
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+            .take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

@@ -12,6 +12,7 @@ import com.example.tabletennisscore.data.MatchResult
 import androidx.core.content.edit
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -28,11 +29,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = MatchDatabase.getInstance(application).matchResultDao()
 
     companion object {
-        const val MAX_PLAYER_NAME_LENGTH = 13
+        const val MAX_PLAYER_NAME_LENGTH = 20
         const val MAX_TOURNAMENT_NAME_LENGTH = 40
         private const val PREFS_NAME = "table_tennis_prefs"
         private const val KEY_PLAYER1_NAME = "p1_name"
         private const val KEY_PLAYER2_NAME = "p2_name"
+        private const val KEY_PLAYER_NAME_GROUP = "player_name_group_json"
         private const val KEY_TOURNAMENT_NAME = "tournament_name"
         private const val KEY_MATCH_IN_PROGRESS = "match_in_progress"
         private const val KEY_MATCH_FIRST_SERVER = "match_first_server"
@@ -439,6 +441,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             putString(KEY_PLAYER1_NAME, sP1Name)
             putString(KEY_PLAYER2_NAME, sP2Name)
         }
+        addPlayerNameToGroup(sP1Name)
+        addPlayerNameToGroup(sP2Name)
 
         _state.value = GameState(
             bestOfSets = validatedBestOf,
@@ -453,12 +457,37 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPlayerName(player: Int, name: String) {
         val trimmed = sanitizePlayerName(name, if (player == 1) "Player 1" else "Player 2")
+        addPlayerNameToGroup(trimmed)
         _state.value = if (player == 1) {
             prefs.edit { putString(KEY_PLAYER1_NAME, trimmed) }
             current.copy(player1Name = trimmed)
         } else {
             prefs.edit { putString(KEY_PLAYER2_NAME, trimmed) }
             current.copy(player2Name = trimmed)
+        }
+    }
+
+    fun getPlayerNameGroup(): List<String> {
+        return loadPlayerNameGroup()
+    }
+
+    fun setPlayerNameGroup(names: List<String>) {
+        val cleaned = names
+            .map { sanitizePlayerName(it, "") }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedBy { it.lowercase(Locale.ROOT) }
+        prefs.edit { putString(KEY_PLAYER_NAME_GROUP, Gson().toJson(cleaned)) }
+    }
+
+    fun addPlayerNameToGroup(name: String) {
+        val normalized = sanitizePlayerName(name, "")
+        if (normalized.isBlank()) return
+        val existing = loadPlayerNameGroup().toMutableList()
+        if (existing.none { it.equals(normalized, ignoreCase = true) }) {
+            existing.add(normalized)
+            existing.sortBy { it.lowercase(Locale.ROOT) }
+            prefs.edit { putString(KEY_PLAYER_NAME_GROUP, Gson().toJson(existing)) }
         }
     }
 
@@ -489,6 +518,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             .joinToString(" ") { word -> 
                 word.replaceFirstChar { it.uppercase() } 
             }
+    }
+
+    private fun loadPlayerNameGroup(): List<String> {
+        val raw = prefs.getString(KEY_PLAYER_NAME_GROUP, null)
+        if (raw.isNullOrBlank()) {
+            val defaults = listOf(current.player1Name, current.player2Name)
+                .map { sanitizePlayerName(it, "") }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase(Locale.ROOT) }
+                .sortedBy { it.lowercase(Locale.ROOT) }
+            if (defaults.isNotEmpty()) {
+                prefs.edit { putString(KEY_PLAYER_NAME_GROUP, Gson().toJson(defaults)) }
+            }
+            return defaults
+        }
+        return try {
+            val parsed = Gson().fromJson(raw, Array<String>::class.java)?.toList().orEmpty()
+            parsed
+                .map { sanitizePlayerName(it, "") }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase(Locale.ROOT) }
+                .sortedBy { it.lowercase(Locale.ROOT) }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     /** Persists the finished match to the database. Call after [captureElapsedUntilNow]. */

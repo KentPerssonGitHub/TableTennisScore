@@ -12,6 +12,7 @@
     <string name="btn_edit_score">Edit Score</string>
     <string name="match_timer_default">00:00</string>
     <string name="dialog_edit_name">Edit name</string>
+    <string name="dialog_select_from_group">Select from group</string>
     <string name="dialog_edit_score_title">Edit score</string>
     <string name="dialog_score_player1">%1$s score</string>
     <string name="dialog_score_player2">%1$s score</string>
@@ -19,6 +20,12 @@
     <string name="dialog_set_label">Set %1$d</string>
     <string name="dialog_current_set_label">Current set</string>
     <string name="dialog_setup_match">Setup match</string>
+    <string name="dialog_name_group">Players</string>
+    <string name="dialog_setup_names_on_main_screen">Player names are edited on the main screen.</string>
+    <string name="dialog_player1_name">Player 1 name</string>
+    <string name="dialog_player2_name">Player 2 name</string>
+    <string name="dialog_edit_name_group">Edit name group</string>
+    <string name="dialog_name_group_hint">One player name per line</string>
     <string name="dialog_hint_name">Player name</string>
     <string name="dialog_serve_label">Serve</string>
     <string name="dialog_best_of_sets">Best of sets</string>
@@ -88,6 +95,7 @@
     <string name="history_edit_tournament">Edit tournament</string>
     <string name="history_edit_player1">Edit player 1</string>
     <string name="history_edit_player2">Edit player 2</string>
+    <string name="history_edit_names_required">Both player names are required.</string>
     <string name="history_match_details_title">Edit match details</string>
     <string name="history_round_label">Round</string>
     <string name="history_data_status_label">Data quality</string>

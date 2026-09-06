@@ -3,6 +3,7 @@ package com.example.tabletennisscore
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Handler
 import android.text.InputFilter
@@ -21,6 +22,8 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
@@ -35,6 +38,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.graphics.toColorInt
 import com.example.tabletennisscore.databinding.ActivityMainBinding
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
 import kotlin.math.PI
@@ -321,8 +328,17 @@ class MainActivity : AppCompatActivity() {
         timerHandler.removeCallbacks(timerTick)
     }
 
+    private fun styleDialogButtons(dialog: AlertDialog) {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            ?.setTextColor(ContextCompat.getColor(this, R.color.score_text))
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+            ?.setTextColor(ContextCompat.getColor(this, R.color.player_name))
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            ?.setTextColor(ContextCompat.getColor(this, R.color.player_name))
+    }
+
     private fun showResumeMatchDialog() {
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.dialog_resume_match_title)
             .setMessage(R.string.dialog_resume_match_message)
             .setPositiveButton(R.string.dialog_yes) { _, _ ->
@@ -332,7 +348,9 @@ class MainActivity : AppCompatActivity() {
                 viewModel.discardMatch()
             }
             .setCancelable(false)
-            .show()
+            .create()
+        dialog.setOnShowListener { styleDialogButtons(dialog) }
+        dialog.show()
     }
 
     private fun updateMatchTimerText() {
@@ -572,6 +590,7 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .create()
         dialog.setOnShowListener {
+            styleDialogButtons(dialog)
             val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             editText.setOnEditorActionListener { _, actionId, event ->
                 val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
@@ -583,12 +602,14 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun showEditNameDialog(player: Int) {        val state = viewModel.state.value ?: return
+    private fun showEditNameDialog(player: Int) {
+        val state = viewModel.state.value ?: return
         val currentName = if (player == 1) state.player1Name else state.player2Name
         val defaultName = if (player == 1) getString(R.string.player1_default) else getString(R.string.player2_default)
         val isDefaultName = currentName == defaultName
+        val nameGroup = viewModel.getPlayerNameGroup()
 
-        val editText = EditText(this).apply {
+        val editText = AutoCompleteTextView(this).apply {
             setText(if (isDefaultName) "" else currentName)
             if (!isDefaultName) {
                 selectAll()
@@ -601,18 +622,65 @@ class MainActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
             imeOptions = EditorInfo.IME_ACTION_DONE
             maxLines = 1
+            threshold = 0
+            if (nameGroup.isNotEmpty()) {
+                setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, nameGroup))
+                setOnClickListener { showDropDown() }
+            }
+        }
+
+        val buttonDensity = resources.displayMetrics.density
+        fun buttonPx(dp: Int): Int = (dp * buttonDensity).toInt()
+
+        val selectFromGroupButton = MaterialButton(this).apply {
+            text = getString(R.string.dialog_select_from_group)
+            isAllCaps = false
+            insetTop = 0
+            insetBottom = 0
+            minimumHeight = buttonPx(30)
+            minHeight = buttonPx(30)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(buttonPx(14), buttonPx(2), buttonPx(14), buttonPx(2))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
+            strokeWidth = buttonPx(1)
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.history_loser_text))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = buttonPx(6)
+            }
+            isEnabled = nameGroup.isNotEmpty()
+            alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
+            setOnClickListener {
+                showPlayerNamePickerDialog(nameGroup, editText.text.toString()) { selected ->
+                    editText.setText(selected)
+                    editText.setSelection(editText.text.length)
+                }
+            }
+        }
+
+        val dialogContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(editText)
+            addView(selectFromGroupButton)
         }
 
         val dialog = AlertDialog.Builder(this)
             .setTitle(getString(R.string.dialog_edit_name))
-            .setView(editText)
+            .setView(dialogContent)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
-                viewModel.setPlayerName(player, editText.text.toString())
+                val entered = editText.text.toString()
+                viewModel.setPlayerName(player, entered)
+                viewModel.addPlayerNameToGroup(entered)
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .create()
 
         dialog.setOnShowListener {
+            styleDialogButtons(dialog)
             val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             editText.setOnEditorActionListener { _, actionId, event ->
                 val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
@@ -624,6 +692,30 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        dialog.show()
+    }
+
+    private fun showPlayerNamePickerDialog(
+        names: List<String>,
+        current: String,
+        onPicked: (String) -> Unit,
+    ) {
+        if (names.isEmpty()) return
+        val checkedIndex = names.indexOfFirst { it.equals(current.trim(), ignoreCase = true) }
+        var selectedIndex = checkedIndex
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_select_from_group)
+            .setSingleChoiceItems(names.toTypedArray(), checkedIndex) { _, which ->
+                selectedIndex = which
+            }
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                if (selectedIndex in names.indices) {
+                    onPicked(names[selectedIndex])
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .create()
+        dialog.setOnShowListener { styleDialogButtons(dialog) }
         dialog.show()
     }
 
@@ -645,7 +737,6 @@ class MainActivity : AppCompatActivity() {
             ).toInt()
             setPadding(horizontalPadding, topPadding, horizontalPadding, 0)
         }
-
         fun buildScoreInput(playerName: String, score: Int): EditText {
             return EditText(this).apply {
                 hint = playerName
@@ -717,7 +808,7 @@ class MainActivity : AppCompatActivity() {
             addView(content)
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.dialog_edit_score_title)
             .setView(scrollContent)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
@@ -736,7 +827,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
+            .create()
+        dialog.setOnShowListener { styleDialogButtons(dialog) }
+        dialog.show()
     }
 
     private fun confirmSetupMatch() {
@@ -746,15 +839,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setMessage(R.string.confirm_setup_match_message)
             .setPositiveButton(R.string.dialog_yes) { _, _ -> showSetupMatchDialog() }
             .setNegativeButton(R.string.dialog_no, null)
-            .show()
+            .create()
+        dialog.setOnShowListener { styleDialogButtons(dialog) }
+        dialog.show()
     }
 
     private fun showSetupMatchDialog() {
         val state = viewModel.state.value ?: return
+        val editableNameGroup = viewModel.getPlayerNameGroup().toMutableList()
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val horizontalPadding = TypedValue.applyDimension(
@@ -769,63 +865,137 @@ class MainActivity : AppCompatActivity() {
             ).toInt()
             setPadding(horizontalPadding, topPadding, horizontalPadding, 0)
         }
+        val density = resources.displayMetrics.density
+        fun px(dp: Int): Int = (dp * density).toInt()
+        fun choiceChip(label: String, selected: Boolean, allowTwoLines: Boolean = false): Chip {
+            return Chip(this).apply {
+                id = View.generateViewId()
+                text = label
+                isCheckable = true
+                isChecked = selected
+                isClickable = true
+                isAllCaps = false
+                isCheckedIconVisible = false
+                if (allowTwoLines) {
+                    // Material Chip does not support multiline text; keep a wider single-line pill.
+                    minWidth = px(84)
+                    chipMinHeight = px(36).toFloat()
+                } else {
+                    minWidth = px(52)
+                    chipMinHeight = px(34).toFloat()
+                }
+            }
+        }
 
-        val bestOfRow = LinearLayout(this).apply {
+        val namesInfo = TextView(this).apply {
+            text = getString(R.string.dialog_setup_names_on_main_screen)
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
+            alpha = 0.85f
+            setPadding(0, 8, 0, 6)
+        }
+
+        val editNameGroupButton = MaterialButton(this).apply {
+            text = getString(R.string.dialog_edit_name_group)
+            isAllCaps = false
+            insetTop = 0
+            insetBottom = 0
+            minimumHeight = px(30)
+            minHeight = px(30)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(px(14), px(2), px(14), px(2))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
+            strokeWidth = px(1)
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.history_loser_text))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = px(6)
+            }
+            setOnClickListener {
+                showNameGroupEditorDialog(editableNameGroup) { updatedNames ->
+                    editableNameGroup.clear()
+                    editableNameGroup.addAll(updatedNames)
+                    viewModel.setPlayerNameGroup(updatedNames)
+                }
+            }
+        }
+
+        content.addView(namesInfo)
+        content.addView(editNameGroupButton)
+
+        val bestOfSection = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 16, 0, 0)
+            setPadding(px(12), px(12), px(12), px(12))
         }
         val bestOfLabel = androidx.appcompat.widget.AppCompatTextView(this).apply {
             text = getString(R.string.dialog_best_of_sets)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setPadding(0, 0, 12, 0)
         }
-        val bestOfGroup = RadioGroup(this).apply {
-            orientation = RadioGroup.HORIZONTAL
+        val bestOfGroup = ChipGroup(this).apply {
+            isSingleSelection = true
+            isSelectionRequired = true
+            chipSpacingHorizontal = px(8)
+            chipSpacingVertical = px(8)
         }
-        val bestOf1 = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "1"
+        var selectedBestOf = if (state.bestOfSets in setOf(1, 3, 5, 7)) state.bestOfSets else 5
+        fun refreshBestOfOutline() {
+            for (i in 0 until bestOfGroup.childCount) {
+                val chip = bestOfGroup.getChildAt(i) as? Chip ?: continue
+                val isSelected = (chip.tag as? Int) == selectedBestOf
+                chip.chipBackgroundColor = ColorStateList.valueOf(Color.TRANSPARENT)
+                chip.chipStrokeWidth = if (isSelected) px(2).toFloat() else px(1).toFloat()
+                chip.chipStrokeColor = ColorStateList.valueOf(
+                    ContextCompat.getColor(this@MainActivity, if (isSelected) R.color.score_text else R.color.history_loser_text),
+                )
+                chip.setTextColor(
+                    ContextCompat.getColor(this@MainActivity, if (isSelected) R.color.score_text else R.color.player_name),
+                )
+            }
         }
-        val bestOf3 = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "3"
+        listOf(1, 3, 5, 7).forEach { bestOf ->
+            bestOfGroup.addView(
+                choiceChip(bestOf.toString(), bestOf == selectedBestOf).apply {
+                    tag = bestOf
+                }
+            )
         }
-        val bestOf5 = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "5"
+        refreshBestOfOutline()
+        bestOfGroup.setOnCheckedStateChangeListener { group, checkedIds ->
+            val selectedId = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
+            selectedBestOf = (group.findViewById<Chip>(selectedId).tag as? Int) ?: selectedBestOf
+            refreshBestOfOutline()
         }
-        val bestOf7 = RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "7"
-        }
-        bestOfGroup.addView(bestOf1)
-        bestOfGroup.addView(bestOf3)
-        bestOfGroup.addView(bestOf5)
-        bestOfGroup.addView(bestOf7)
 
-        when (state.bestOfSets) {
-            1 -> bestOfGroup.check(bestOf1.id)
-            3 -> bestOfGroup.check(bestOf3.id)
-            7 -> bestOfGroup.check(bestOf7.id)
-            else -> bestOfGroup.check(bestOf5.id)
+        bestOfSection.addView(bestOfLabel)
+        bestOfSection.addView(bestOfGroup)
+        val bestOfCard = MaterialCardView(this).apply {
+            setCardBackgroundColor(Color.TRANSPARENT)
+            strokeWidth = px(1)
+            strokeColor = ContextCompat.getColor(this@MainActivity, R.color.player_name)
+            radius = px(8).toFloat()
+            useCompatPadding = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = px(14) }
+            addView(bestOfSection)
         }
-
-        bestOfRow.addView(bestOfLabel)
-        bestOfRow.addView(bestOfGroup)
-
-        content.addView(bestOfRow)
+        content.addView(bestOfCard)
 
         // Round Selection
-        val roundRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 16, 0, 0)
+        val roundSection = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(12), px(12), px(12), px(12))
         }
         val roundLabel = TextView(this).apply {
             text = getString(R.string.history_round_label)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(0, 0, 12, 0)
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, 0, 0, px(8))
         }
         val rounds = listOf(
             getString(R.string.round_pool),
@@ -837,47 +1007,67 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.round_final)
         )
         
-        val roundGrid = android.widget.GridLayout(this).apply {
-            columnCount = 4
-            setPadding(0, 8, 0, 8)
-        }
-        
-        val radioButtons = mutableListOf<RadioButton>()
-        rounds.forEach { round ->
-            val rb = RadioButton(this).apply {
-                text = round
-                tag = round
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                isChecked = (state.matchRound == round)
-                if (state.matchRound == "" && round == getString(R.string.round_pool)) isChecked = true
-                setOnClickListener { view ->
-                    radioButtons.forEach { it.isChecked = (it == view) }
-                }
-            }
-            radioButtons.add(rb)
-            roundGrid.addView(rb)
+        val roundGroup = ChipGroup(this).apply {
+            isSingleSelection = true
+            isSelectionRequired = true
+            chipSpacingHorizontal = px(8)
+            chipSpacingVertical = px(8)
+            setPadding(0, 6, 0, 8)
         }
 
-        roundRow.addView(roundLabel)
-        roundRow.addView(roundGrid)
-        content.addView(roundRow)
+        var selectedRound = if (state.matchRound.isNotBlank()) state.matchRound else getString(R.string.round_pool)
+        fun refreshRoundOutline() {
+            for (i in 0 until roundGroup.childCount) {
+                val chip = roundGroup.getChildAt(i) as? Chip ?: continue
+                val isSelected = (chip.tag as? String) == selectedRound
+                chip.chipBackgroundColor = ColorStateList.valueOf(Color.TRANSPARENT)
+                chip.chipStrokeWidth = if (isSelected) px(2).toFloat() else px(1).toFloat()
+                chip.chipStrokeColor = ColorStateList.valueOf(
+                    ContextCompat.getColor(this@MainActivity, if (isSelected) R.color.score_text else R.color.history_loser_text),
+                )
+                chip.setTextColor(
+                    ContextCompat.getColor(this@MainActivity, if (isSelected) R.color.score_text else R.color.player_name),
+                )
+            }
+        }
+        rounds.forEach { round ->
+            roundGroup.addView(
+                choiceChip(round, round == selectedRound, allowTwoLines = true).apply {
+                    tag = round
+                }
+            )
+        }
+        refreshRoundOutline()
+        roundGroup.setOnCheckedStateChangeListener { group, checkedIds ->
+            val selectedId = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
+            selectedRound = (group.findViewById<Chip>(selectedId).tag as? String) ?: selectedRound
+            refreshRoundOutline()
+        }
+
+        roundSection.addView(roundLabel)
+        roundSection.addView(roundGroup)
+        val roundCard = MaterialCardView(this).apply {
+            setCardBackgroundColor(Color.TRANSPARENT)
+            strokeWidth = px(1)
+            strokeColor = ContextCompat.getColor(this@MainActivity, R.color.player_name)
+            radius = px(8).toFloat()
+            useCompatPadding = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = px(10) }
+            addView(roundSection)
+        }
+        content.addView(roundCard)
 
         val scrollContent = ScrollView(this).apply {
             addView(content)
         }
 
-        AlertDialog.Builder(this)
+        val setupDialog = AlertDialog.Builder(this)
             .setTitle(R.string.dialog_setup_match)
             .setView(scrollContent)
             .setPositiveButton(R.string.dialog_done) { _, _ ->
-                val selectedBestOf = when (bestOfGroup.checkedRadioButtonId) {
-                    bestOf1.id -> 1
-                    bestOf3.id -> 3
-                    bestOf7.id -> 7
-                    else -> 5
-                }
-                val selectedRb = radioButtons.find { it.isChecked }
-                val selectedRound = selectedRb?.tag as? String ?: ""
                 viewModel.setMatchRound(selectedRound)
                 viewModel.setupMatch(
                     player1Name = state.player1Name,
@@ -887,7 +1077,49 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             .setNegativeButton(R.string.dialog_cancel, null)
-            .show()
+            .create()
+        setupDialog.setOnShowListener {
+            styleDialogButtons(setupDialog)
+        }
+        setupDialog.show()
+    }
+
+    private fun showNameGroupEditorDialog(existingNames: List<String>, onSave: (List<String>) -> Unit) {
+        val editor = EditText(this).apply {
+            hint = getString(R.string.dialog_name_group_hint)
+            setText(existingNames.joinToString("\n"))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 6
+            maxLines = 10
+            setSelection(text.length)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_edit_name_group)
+            .setView(editor)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val cleaned = editor.text.toString()
+                    .lineSequence()
+                    .map { sanitizeGroupName(it) }
+                    .filter { it.isNotBlank() }
+                    .distinctBy { it.lowercase(Locale.ROOT) }
+                    .sortedBy { it.lowercase(Locale.ROOT) }
+                    .toList()
+                onSave(cleaned)
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .create()
+        dialog.setOnShowListener { styleDialogButtons(dialog) }
+        dialog.show()
+    }
+
+    private fun sanitizeGroupName(name: String): String {
+        return name.trim()
+            .replace(Regex("\\s+"), " ")
+            .split(" ")
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+            .take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
     }
 
     /**
