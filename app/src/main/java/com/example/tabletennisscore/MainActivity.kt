@@ -838,7 +838,7 @@ class MainActivity : AppCompatActivity() {
         )
         
         val roundGrid = android.widget.GridLayout(this).apply {
-            columnCount = 3
+            columnCount = 4
             setPadding(0, 8, 0, 8)
         }
         

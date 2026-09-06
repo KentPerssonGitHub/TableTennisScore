@@ -1,6 +1,7 @@
 package com.example.tabletennisscore
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.graphics.Typeface
 import android.util.TypedValue
@@ -13,7 +14,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.TextView
+import android.widget.Toast
 import android.text.TextUtils
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -28,8 +31,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.tabletennisscore.data.MatchDatabase
 import com.example.tabletennisscore.data.MatchResult
 import com.example.tabletennisscore.databinding.ActivityHistoryBinding
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
+import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,10 +46,21 @@ class HistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHistoryBinding
     private val dao by lazy { MatchDatabase.getInstance(this).matchResultDao() }
-    
+    private val backupPrefs by lazy { getSharedPreferences("history_backup_prefs", MODE_PRIVATE) }
+    private val lastBackupDisplayFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
+
     // Tracks which tournaments are collapsed. Persists during the activity's lifecycle.
     private val collapsedTournaments = mutableSetOf<String>()
     private var lastLoadedResults: List<MatchResult> = emptyList()
+    private val gson = GsonBuilder().setPrettyPrinting().create()
+
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { exportBackupToUri(it) }
+    }
+
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { showImportModeDialog(it) }
+    }
 
     private val adapter = MatchHistoryAdapter(
         onDelete = { result ->
@@ -90,6 +109,9 @@ class HistoryActivity : AppCompatActivity() {
         binding.rvHistory.adapter = adapter
 
         binding.btnHistoryBack.setOnClickListener { finish() }
+        binding.btnHistoryExport.setOnClickListener { startExport() }
+        binding.btnHistoryImport.setOnClickListener { startImport() }
+        renderLastBackupTime()
 
         lifecycleScope.launch {
             dao.getAll().collectLatest { results ->
@@ -123,6 +145,107 @@ class HistoryActivity : AppCompatActivity() {
             }
         }
         return list
+    }
+
+    private fun startExport() {
+        if (lastLoadedResults.isEmpty()) {
+            toast(R.string.history_export_no_data)
+            return
+        }
+        val fileName = "table_tennis_backup_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.json"
+        exportLauncher.launch(fileName)
+    }
+
+    private fun exportBackupToUri(uri: Uri) {
+        lifecycleScope.launch {
+            runCatching {
+                val payload = BackupPayload(
+                    matches = lastLoadedResults.map { it.toBackupMatch() },
+                )
+                val json = gson.toJson(payload)
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                        writer.write(json)
+                    } ?: error("Unable to open output stream")
+                }
+            }.onSuccess {
+                backupPrefs.edit().putLong("key_last_backup_ms", System.currentTimeMillis()).apply()
+                renderLastBackupTime()
+                toast(R.string.history_export_success)
+            }.onFailure {
+                toast(getString(R.string.history_export_failed) + " " + (it.message ?: ""))
+            }
+        }
+    }
+
+    private fun startImport() {
+        importLauncher.launch(arrayOf("application/json", "text/*"))
+    }
+
+    private fun showImportModeDialog(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.history_import_title)
+            .setMessage(R.string.history_import_message)
+            .setPositiveButton(R.string.history_import_replace) { _, _ ->
+                importBackupFromUri(uri, replaceExisting = true)
+            }
+            .setNegativeButton(R.string.history_import_append) { _, _ ->
+                importBackupFromUri(uri, replaceExisting = false)
+            }
+            .setNeutralButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun importBackupFromUri(uri: Uri, replaceExisting: Boolean) {
+        lifecycleScope.launch {
+            runCatching {
+                val imported = withContext(Dispatchers.IO) {
+                    val json = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("Unable to read backup file")
+                    parseBackupJson(json)
+                }
+                if (imported.isEmpty()) {
+                    toast(R.string.history_import_empty)
+                    return@launch
+                }
+                if (replaceExisting) {
+                    dao.deleteAll()
+                }
+                dao.insertAll(imported)
+                toast(getString(R.string.history_import_success, imported.size))
+            }.onFailure {
+                toast(getString(R.string.history_import_failed) + " " + (it.message ?: ""))
+            }
+        }
+    }
+
+    private fun parseBackupJson(json: String): List<MatchResult> {
+        val root = JsonParser.parseString(json)
+        val backupMatches: List<BackupMatch> = if (root.isJsonObject) {
+            val payload = gson.fromJson(root, BackupPayload::class.java)
+            payload.matches
+        } else {
+            val listType = object : TypeToken<List<BackupMatch>>() {}.type
+            gson.fromJson(root, listType)
+        }
+        return backupMatches.mapNotNull { it.toMatchResultOrNull() }
+    }
+
+    private fun toast(resId: Int) {
+        Toast.makeText(this, getString(resId), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun toast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun renderLastBackupTime() {
+        val ts = backupPrefs.getLong("key_last_backup_ms", 0L)
+        binding.tvHistoryLastBackup.text = if (ts <= 0L) {
+            getString(R.string.history_last_backup_never)
+        } else {
+            getString(R.string.history_last_backup_format, lastBackupDisplayFormat.format(Date(ts)))
+        }
     }
 
     private fun showEditTournamentDialog(oldName: String, matchesInGroup: List<MatchResult>) {
@@ -177,7 +300,7 @@ class HistoryActivity : AppCompatActivity() {
         )
         
         val roundGrid = android.widget.GridLayout(this).apply {
-            columnCount = 3
+            columnCount = 4
             setPadding(0, 8, 0, 8)
         }
         
@@ -266,6 +389,74 @@ class HistoryActivity : AppCompatActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    private data class BackupPayload(
+        val schemaVersion: Int = 1,
+        val exportedAt: Long = System.currentTimeMillis(),
+        val matches: List<BackupMatch> = emptyList(),
+    )
+
+    private data class BackupMatch(
+        val tournamentName: String? = null,
+        val player1Name: String? = null,
+        val player2Name: String? = null,
+        val sets1: Int? = null,
+        val sets2: Int? = null,
+        val winner: Int? = null,
+        val bestOfSets: Int? = null,
+        val durationMs: Long? = null,
+        val setResultsJson: String? = null,
+        val pointHistoryJson: String? = null,
+        val matchFirstServer: Int? = null,
+        val matchRound: String? = null,
+        val isDataValid: Boolean? = null,
+        val playedAt: Long? = null,
+    ) {
+        fun toMatchResultOrNull(): MatchResult? {
+            val p1 = player1Name?.trim().orEmpty()
+            val p2 = player2Name?.trim().orEmpty()
+            val winnerSafe = winner ?: 0
+            if (p1.isEmpty() || p2.isEmpty() || (winnerSafe != 1 && winnerSafe != 2)) {
+                return null
+            }
+            return MatchResult(
+                id = 0,
+                tournamentName = tournamentName?.trim().orEmpty(),
+                player1Name = p1,
+                player2Name = p2,
+                sets1 = sets1 ?: 0,
+                sets2 = sets2 ?: 0,
+                winner = winnerSafe,
+                bestOfSets = bestOfSets ?: 5,
+                durationMs = durationMs ?: 0L,
+                setResultsJson = setResultsJson.orEmpty(),
+                pointHistoryJson = pointHistoryJson.orEmpty(),
+                matchFirstServer = if ((matchFirstServer ?: 1) == 2) 2 else 1,
+                matchRound = matchRound.orEmpty(),
+                isDataValid = isDataValid ?: true,
+                playedAt = playedAt ?: System.currentTimeMillis(),
+            )
+        }
+    }
+
+    private fun MatchResult.toBackupMatch(): BackupMatch {
+        return BackupMatch(
+            tournamentName = tournamentName,
+            player1Name = player1Name,
+            player2Name = player2Name,
+            sets1 = sets1,
+            sets2 = sets2,
+            winner = winner,
+            bestOfSets = bestOfSets,
+            durationMs = durationMs,
+            setResultsJson = setResultsJson,
+            pointHistoryJson = pointHistoryJson,
+            matchFirstServer = matchFirstServer,
+            matchRound = matchRound,
+            isDataValid = isDataValid,
+            playedAt = playedAt,
+        )
     }
 
     // ——— List Items ——————————————————————————————————————————————————————————

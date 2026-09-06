@@ -11,6 +11,9 @@ interface MatchResultDao {
     @Insert
     suspend fun insert(result: MatchResult)
 
+    @Insert
+    suspend fun insertAll(results: List<MatchResult>)
+
     @androidx.room.Update
     suspend fun update(result: MatchResult)
 
