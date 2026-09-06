@@ -17,4 +17,7 @@
     <color name="win_vibrant">#42A5F5</color>
     <color name="loss_muted">#4A4E69</color>
     <color name="loss_vibrant">#EF5350</color>
+    <color name="menu_button_primary_border">#64B5F6</color>
+    <color name="menu_button_primary_ripple">#40FFFFFF</color>
+    <color name="menu_button_secondary_ripple">#30E0E0E0</color>
 </resources>

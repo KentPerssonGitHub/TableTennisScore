@@ -129,124 +129,60 @@
 
     <!-- ===== CENTER CONTROLS ===== -->
 
-    <!-- Keep controls in a vertical column with borders and dividers. -->
     <LinearLayout
         android:id="@+id/centerControlsRow"
-        android:layout_width="140dp"
+        android:layout_width="196dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:background="@drawable/menu_column_background"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <View
-            android:id="@+id/dividerStartTop"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/divider" />
-
         <TextView
             android:id="@+id/btnStartMatch"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_center_menu_secondary_button"
             android:text="@string/btn_start_match"
-            android:textColor="@color/score_text"
-            android:textSize="18sp"
-            android:gravity="center"
-            android:paddingVertical="12dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <View
-            android:id="@+id/dividerPauseTop"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:visibility="gone"
-            android:background="@color/divider" />
+            android:contentDescription="@string/btn_start_match" />
 
         <TextView
             android:id="@+id/btnPauseMatchText"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/btn_pause_match"
-            android:textColor="@color/score_text"
-            android:textSize="18sp"
-            android:gravity="center"
-            android:paddingVertical="12dp"
             android:visibility="gone"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <View
-            android:id="@+id/dividerSetupTop"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/divider" />
+            android:background="@drawable/bg_center_menu_secondary_button" />
 
         <TextView
             android:id="@+id/btnSetupMatch"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_center_menu_secondary_button"
             android:text="@string/btn_setup_match"
-            android:textColor="@color/score_text"
-            android:textSize="18sp"
-            android:gravity="center"
-            android:paddingVertical="12dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <View
-            android:id="@+id/dividerUndoTop"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:visibility="gone"
-            android:background="@color/divider" />
+            android:contentDescription="@string/btn_setup_match" />
 
         <TextView
             android:id="@+id/btnUndoText"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/btn_undo"
-            android:textColor="@color/score_text"
-            android:textSize="18sp"
-            android:gravity="center"
-            android:paddingVertical="12dp"
             android:visibility="gone"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <View
-            android:id="@+id/dividerHistoryTop"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/divider" />
-
+            android:background="@drawable/bg_center_menu_secondary_button" />
 
         <TextView
             android:id="@+id/btnHistory"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/btn_history"
-            android:textColor="@color/score_text"
-            android:textSize="18sp"
-            android:gravity="center"
-            android:paddingVertical="12dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <View
-            android:id="@+id/dividerBottom"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/divider" />
+            android:background="@drawable/bg_center_menu_secondary_button" />
 
     </LinearLayout>
 

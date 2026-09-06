@@ -272,36 +272,26 @@ class MainActivity : AppCompatActivity() {
 
             if (state.isMatchRunning) {
                 binding.btnPauseMatchText.visibility = View.VISIBLE
-                binding.dividerPauseTop.visibility = View.VISIBLE
                 binding.btnUndoText.visibility = View.VISIBLE
-                binding.dividerUndoTop.visibility = View.VISIBLE
-                
+
                 binding.btnStartMatch.visibility = View.GONE
-                binding.dividerStartTop.visibility = View.GONE
                 binding.btnSetupMatch.visibility = View.GONE
-                binding.dividerSetupTop.visibility = View.GONE
                 binding.btnHistory.visibility = View.GONE
-                binding.dividerHistoryTop.visibility = View.GONE
-                
+
                 binding.centerControlsRow.visibility = View.VISIBLE
                 binding.ivSwapSides.visibility = View.GONE
                 startRallyBallAnimationIfNeeded()
                 startMatchTimerTickerIfNeeded()
             } else {
                 binding.btnPauseMatchText.visibility = View.GONE
-                binding.dividerPauseTop.visibility = View.GONE
                 binding.btnUndoText.visibility = View.GONE
-                binding.dividerUndoTop.visibility = View.GONE
-                
+
                 // Show Start/Resume, Setup, and History when not running, unless awaiting swap
                 val showControls = !isAwaitingSwapConfirm
                 binding.btnStartMatch.visibility = if (showControls) View.VISIBLE else View.GONE
-                binding.dividerStartTop.visibility = if (showControls) View.VISIBLE else View.GONE
                 binding.btnSetupMatch.visibility = if (showControls) View.VISIBLE else View.GONE
-                binding.dividerSetupTop.visibility = if (showControls) View.VISIBLE else View.GONE
                 binding.btnHistory.visibility = if (showControls) View.VISIBLE else View.GONE
-                binding.dividerHistoryTop.visibility = if (showControls) View.VISIBLE else View.GONE
-                
+
                 binding.centerControlsRow.visibility = if (showControls) View.VISIBLE else View.GONE
                 binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
                 stopRallyBallAnimation()
@@ -645,6 +635,7 @@ class MainActivity : AppCompatActivity() {
             strokeWidth = buttonPx(1)
             strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.history_loser_text))
             backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            cornerRadius = buttonPx(18)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -899,14 +890,15 @@ class MainActivity : AppCompatActivity() {
             isAllCaps = false
             insetTop = 0
             insetBottom = 0
-            minimumHeight = px(30)
-            minHeight = px(30)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setPadding(px(14), px(2), px(14), px(2))
+            minimumHeight = px(34)
+            minHeight = px(34)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setPadding(px(18), px(4), px(18), px(4))
             setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
             strokeWidth = px(1)
             strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.history_loser_text))
-            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            cornerRadius = px(20)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,

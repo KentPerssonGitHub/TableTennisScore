@@ -28,5 +28,25 @@
         <item name="android:fontFamily">@font/goldman</item>
         <item name="fontFamily">@font/goldman</item>
     </style>
+
+    <style name="Widget.TableTennisScore.CenterMenuAction" parent="@style/Widget.TableTennisScore.TextView">
+        <item name="android:textSize">15.3sp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingVertical">10dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:layout_marginEnd">8dp</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:layout_marginBottom">4dp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="Widget.TableTennisScore.CenterMenuPrimaryAction" parent="@style/Widget.TableTennisScore.CenterMenuAction">
+        <item name="android:textColor">@color/score_text</item>
+    </style>
+
+    <style name="Widget.TableTennisScore.CenterMenuSecondaryAction" parent="@style/Widget.TableTennisScore.CenterMenuAction">
+        <item name="android:textColor">@color/player_name</item>
+    </style>
 </resources>
 

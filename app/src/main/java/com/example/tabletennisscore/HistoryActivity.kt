@@ -332,6 +332,7 @@ class HistoryActivity : AppCompatActivity() {
             strokeWidth = buttonPx(1)
             strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@HistoryActivity, R.color.history_loser_text))
             backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            cornerRadius = buttonPx(18)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -361,6 +362,7 @@ class HistoryActivity : AppCompatActivity() {
             strokeWidth = buttonPx(1)
             strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@HistoryActivity, R.color.history_loser_text))
             backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            cornerRadius = buttonPx(18)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
