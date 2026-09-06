@@ -816,6 +816,52 @@ class MainActivity : AppCompatActivity() {
 
         content.addView(bestOfRow)
 
+        // Round Selection
+        val roundRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 16, 0, 0)
+        }
+        val roundLabel = TextView(this).apply {
+            text = getString(R.string.history_round_label)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(0, 0, 12, 0)
+        }
+        val rounds = listOf(
+            getString(R.string.round_pool),
+            getString(R.string.round_group),
+            getString(R.string.round_32),
+            getString(R.string.round_16),
+            getString(R.string.round_8),
+            getString(R.string.round_semi),
+            getString(R.string.round_final)
+        )
+        
+        val roundGrid = android.widget.GridLayout(this).apply {
+            columnCount = 3
+            setPadding(0, 8, 0, 8)
+        }
+        
+        val radioButtons = mutableListOf<RadioButton>()
+        rounds.forEach { round ->
+            val rb = RadioButton(this).apply {
+                text = round
+                tag = round
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                isChecked = (state.matchRound == round)
+                if (state.matchRound == "" && round == getString(R.string.round_pool)) isChecked = true
+                setOnClickListener { view ->
+                    radioButtons.forEach { it.isChecked = (it == view) }
+                }
+            }
+            radioButtons.add(rb)
+            roundGrid.addView(rb)
+        }
+
+        roundRow.addView(roundLabel)
+        roundRow.addView(roundGrid)
+        content.addView(roundRow)
+
         val scrollContent = ScrollView(this).apply {
             addView(content)
         }
@@ -830,6 +876,9 @@ class MainActivity : AppCompatActivity() {
                     bestOf7.id -> 7
                     else -> 5
                 }
+                val selectedRb = radioButtons.find { it.isChecked }
+                val selectedRound = selectedRb?.tag as? String ?: ""
+                viewModel.setMatchRound(selectedRound)
                 viewModel.setupMatch(
                     player1Name = state.player1Name,
                     player2Name = state.player2Name,

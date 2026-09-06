@@ -59,6 +59,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val awaitingDecidingSetSwapConfirmation: Boolean = false,
         val resumeAfterDecidingSetSwapConfirmation: Boolean = false,
         val tournamentName: String = "",
+        val matchRound: String = "",
     )
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -226,6 +227,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     setResults = setResults,
                     pointHistory = newPointHistory,
                     matchFirstServer = matchFirstServer,
+                    matchRound = s.matchRound,
                 )
                 // Match over — do NOT swap sides
             } else {
@@ -366,6 +368,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     setResults = finalSetResults,
                     pointHistory = finalPointHistory,
                     matchFirstServer = matchFirstServer,
+                    matchRound = current.matchRound,
                 )
             }
             _state.value = current.copy(
@@ -382,6 +385,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 decidingSetFiveSwapDone = false,
                 awaitingDecidingSetSwapConfirmation = false,
                 resumeAfterDecidingSetSwapConfirmation = false,
+                matchRound = current.matchRound,
             )
         } else {
             val server = nextServer(
@@ -464,6 +468,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = current.copy(tournamentName = sanitized)
     }
 
+    fun setMatchRound(round: String) {
+        _state.value = current.copy(matchRound = round)
+    }
+
     private fun sanitizePlayerName(name: String, fallback: String): String {
         return normalizeNameInput(name)
             .take(MAX_PLAYER_NAME_LENGTH)
@@ -495,6 +503,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         setResults: List<Pair<Int, Int>>,
         pointHistory: List<List<Int>>,
         matchFirstServer: Int,
+        matchRound: String,
     ) {
         val durationMs = elapsedPlayedMs
         val setResultsJson = setResults.joinToString(",") { "${it.first}-${it.second}" }
@@ -515,6 +524,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     setResultsJson = setResultsJson,
                     pointHistoryJson = pointHistoryJson,
                     matchFirstServer = matchFirstServer,
+                    matchRound = matchRound,
                 )
             )
         }

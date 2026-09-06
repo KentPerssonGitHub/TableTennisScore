@@ -8,7 +8,11 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.text.TextUtils
 import androidx.appcompat.app.AlertDialog
@@ -35,6 +39,11 @@ class HistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHistoryBinding
     private val dao by lazy { MatchDatabase.getInstance(this).matchResultDao() }
+    
+    // Tracks which tournaments are collapsed. Persists during the activity's lifecycle.
+    private val collapsedTournaments = mutableSetOf<String>()
+    private var lastLoadedResults: List<MatchResult> = emptyList()
+
     private val adapter = MatchHistoryAdapter(
         onDelete = { result ->
             AlertDialog.Builder(this)
@@ -50,6 +59,20 @@ class HistoryActivity : AppCompatActivity() {
                 putExtra(PointDetailsActivity.EXTRA_MATCH_ID, result.id)
             }
             startActivity(intent)
+        },
+        onEditTournament = { oldName, results ->
+            showEditTournamentDialog(oldName, results)
+        },
+        onEditMatchDetails = { result ->
+            showEditMatchDetailsDialog(result)
+        },
+        onToggleExpand = { tournamentName ->
+            if (collapsedTournaments.contains(tournamentName)) {
+                collapsedTournaments.remove(tournamentName)
+            } else {
+                collapsedTournaments.add(tournamentName)
+            }
+            refreshList()
         }
     )
 
@@ -66,10 +89,130 @@ class HistoryActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             dao.getAll().collectLatest { results ->
-                adapter.submitList(results)
-                binding.tvHistoryEmpty.visibility = if (results.isEmpty()) View.VISIBLE else View.GONE
+                lastLoadedResults = results
+                refreshList()
             }
         }
+    }
+
+    private fun refreshList() {
+        val grouped = groupMatches(lastLoadedResults)
+        adapter.submitList(grouped)
+        binding.tvHistoryEmpty.visibility = if (lastLoadedResults.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    private fun groupMatches(results: List<MatchResult>): List<HistoryListItem> {
+        val list = mutableListOf<HistoryListItem>()
+        var currentTournament = ""
+        
+        results.forEachIndexed { index, match ->
+            if (index == 0 || match.tournamentName != currentTournament) {
+                currentTournament = match.tournamentName
+                val isExpanded = !collapsedTournaments.contains(currentTournament)
+                val matchesInGroup = results.filter { it.tournamentName == currentTournament }
+                list.add(HistoryListItem.Header(currentTournament, matchesInGroup, isExpanded))
+            }
+            
+            val isExpanded = !collapsedTournaments.contains(match.tournamentName)
+            if (isExpanded) {
+                list.add(HistoryListItem.Match(match))
+            }
+        }
+        return list
+    }
+
+    private fun showEditTournamentDialog(oldName: String, matchesInGroup: List<MatchResult>) {
+        val editText = EditText(this).apply {
+            setText(oldName)
+            setSelection(oldName.length)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.history_edit_tournament)
+            .setView(editText)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val newName = editText.text.toString().trim()
+                if (newName != oldName) {
+                    lifecycleScope.launch {
+                        matchesInGroup.forEach { match ->
+                            dao.update(match.copy(tournamentName = newName))
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun showEditMatchDetailsDialog(result: MatchResult) {
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (20 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, 0)
+        }
+        val p1Edit = EditText(this).apply {
+            hint = getString(R.string.history_edit_player1)
+            setText(result.player1Name)
+        }
+        val p2Edit = EditText(this).apply {
+            hint = getString(R.string.history_edit_player2)
+            setText(result.player2Name)
+        }
+        
+        val roundLabel = TextView(this).apply {
+            text = getString(R.string.history_round_label)
+            setPadding(0, 16, 0, 8)
+        }
+        val rounds = listOf(
+            getString(R.string.round_pool),
+            getString(R.string.round_group),
+            getString(R.string.round_32),
+            getString(R.string.round_16),
+            getString(R.string.round_8),
+            getString(R.string.round_semi),
+            getString(R.string.round_final)
+        )
+        
+        val roundGrid = android.widget.GridLayout(this).apply {
+            columnCount = 3
+            setPadding(0, 8, 0, 8)
+        }
+        
+        val radioButtons = mutableListOf<RadioButton>()
+        rounds.forEach { round ->
+            val rb = RadioButton(this).apply {
+                text = round
+                tag = round
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                isChecked = (result.matchRound == round)
+                setOnClickListener { view ->
+                    radioButtons.forEach { it.isChecked = (it == view) }
+                }
+            }
+            radioButtons.add(rb)
+            roundGrid.addView(rb)
+        }
+
+        layout.addView(p1Edit)
+        layout.addView(p2Edit)
+        layout.addView(roundLabel)
+        layout.addView(roundGrid)
+
+        AlertDialog.Builder(this)
+            .setTitle("Edit Match Details")
+            .setView(layout)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val p1 = p1Edit.text.toString().trim()
+                val p2 = p2Edit.text.toString().trim()
+                val selectedRb = radioButtons.find { it.isChecked }
+                val selectedRound = selectedRb?.tag as? String ?: ""
+                if (p1.isNotEmpty() && p2.isNotEmpty()) {
+                    lifecycleScope.launch {
+                        dao.update(result.copy(player1Name = p1, player2Name = p2, matchRound = selectedRound))
+                    }
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -85,26 +228,79 @@ class HistoryActivity : AppCompatActivity() {
         }
     }
 
+    // ——— List Items ——————————————————————————————————————————————————————————
+
+    sealed class HistoryListItem {
+        data class Header(val tournamentName: String, val matches: List<MatchResult>, val isExpanded: Boolean) : HistoryListItem()
+        data class Match(val result: MatchResult) : HistoryListItem()
+    }
+
     // ——— Adapter ———————————————————————————————————————————————————————————
 
     class MatchHistoryAdapter(
         private val onDelete: (MatchResult) -> Unit,
         private val onDetails: (MatchResult) -> Unit,
-    ) : ListAdapter<MatchResult, MatchHistoryAdapter.ViewHolder>(DIFF) {
+        private val onEditTournament: (String, List<MatchResult>) -> Unit,
+        private val onEditMatchDetails: (MatchResult) -> Unit,
+        private val onToggleExpand: (String) -> Unit
+    ) : ListAdapter<HistoryListItem, RecyclerView.ViewHolder>(DIFF) {
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_match_result, parent, false)
-            return ViewHolder(view)
+        private val TYPE_HEADER = 0
+        private val TYPE_MATCH = 1
+
+        override fun getItemViewType(position: Int): Int {
+            return when (getItem(position)) {
+                is HistoryListItem.Header -> TYPE_HEADER
+                is HistoryListItem.Match -> TYPE_MATCH
+            }
         }
 
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) =
-            holder.bind(getItem(position), onDelete, onDetails)
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == TYPE_HEADER) {
+                val view = LayoutInflater.from(parent.context)
+                    .inflate(R.layout.item_history_header, parent, false)
+                HeaderViewHolder(view)
+            } else {
+                val view = LayoutInflater.from(parent.context)
+                    .inflate(R.layout.item_match_result, parent, false)
+                MatchViewHolder(view)
+            }
+        }
 
-        class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            val item = getItem(position)
+            if (holder is HeaderViewHolder && item is HistoryListItem.Header) {
+                holder.bind(item, onEditTournament, onToggleExpand)
+            } else if (holder is MatchViewHolder && item is HistoryListItem.Match) {
+                holder.bind(item.result, onDelete, onDetails, onEditMatchDetails)
+            }
+        }
+
+        class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            private val tvTournamentName: TextView = view.findViewById(R.id.tvHeaderTournamentName)
+            private val ivExpandIcon: ImageView = view.findViewById(R.id.ivHeaderExpandIcon)
+            
+            fun bind(header: HistoryListItem.Header, onEdit: (String, List<MatchResult>) -> Unit, onToggle: (String) -> Unit) {
+                tvTournamentName.text = if (header.tournamentName.isBlank()) "No Tournament" else header.tournamentName
+                
+                // Rotate icon based on state
+                ivExpandIcon.rotation = if (header.isExpanded) 0f else -90f
+                
+                itemView.setOnClickListener {
+                    onToggle(header.tournamentName)
+                }
+                itemView.setOnLongClickListener {
+                    onEdit(header.tournamentName, header.matches)
+                    true
+                }
+            }
+        }
+
+        class MatchViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             private val scoreGrid: LinearLayout = view.findViewById(R.id.layoutItemScoreGrid)
             private val tvDuration: TextView = view.findViewById(R.id.tvItemDuration)
             private val tvDate: TextView = view.findViewById(R.id.tvItemDate)
+            private val tvRound: TextView = view.findViewById(R.id.tvItemRound)
             private val tvWinner: TextView = view.findViewById(R.id.tvItemWinner)
             private val tvTournament: TextView = view.findViewById(R.id.tvItemTournament)
             private val btnDelete: View = view.findViewById(R.id.btnItemDelete)
@@ -113,7 +309,12 @@ class HistoryActivity : AppCompatActivity() {
             private val dateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
             private val density = view.resources.displayMetrics.density
 
-            fun bind(result: MatchResult, onDelete: (MatchResult) -> Unit, onDetails: (MatchResult) -> Unit) {
+            fun bind(
+                result: MatchResult, 
+                onDelete: (MatchResult) -> Unit, 
+                onDetails: (MatchResult) -> Unit,
+                onEditMatchDetails: (MatchResult) -> Unit
+            ) {
                 val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
                 val loserName = if (result.winner == 1) result.player2Name else result.player1Name
                 val setResults = parseSetResults(result.setResultsJson)
@@ -122,13 +323,20 @@ class HistoryActivity : AppCompatActivity() {
                 tvWinner.text = itemView.context.getString(R.string.history_winner_only, winnerName)
                 tvDuration.text = formatDuration(result.durationMs)
                 tvDate.text = dateFormat.format(Date(result.playedAt))
-                tvTournament.text = itemView.context.getString(
-                    R.string.history_tournament_label,
-                    result.tournamentName,
-                )
-                tvTournament.visibility = if (result.tournamentName.isBlank()) View.GONE else View.VISIBLE
+                
+                tvRound.text = if (result.matchRound.isNotBlank()) "· ${result.matchRound}" else ""
+                tvRound.visibility = if (result.matchRound.isNotBlank()) View.VISIBLE else View.GONE
+
+                // Tournament name in card is hidden since we have headers now
+                tvTournament.visibility = View.GONE
+                
                 btnDelete.setOnClickListener { onDelete(result) }
                 btnDetails.setOnClickListener { onDetails(result) }
+                
+                itemView.setOnLongClickListener {
+                    onEditMatchDetails(result)
+                    true
+                }
             }
 
             private fun renderScoreGrid(
@@ -307,9 +515,17 @@ class HistoryActivity : AppCompatActivity() {
         }
 
         companion object {
-            val DIFF = object : DiffUtil.ItemCallback<MatchResult>() {
-                override fun areItemsTheSame(a: MatchResult, b: MatchResult) = a.id == b.id
-                override fun areContentsTheSame(a: MatchResult, b: MatchResult) = a == b
+            val DIFF = object : DiffUtil.ItemCallback<HistoryListItem>() {
+                override fun areItemsTheSame(a: HistoryListItem, b: HistoryListItem): Boolean {
+                    return if (a is HistoryListItem.Header && b is HistoryListItem.Header) {
+                        a.tournamentName == b.tournamentName
+                    } else if (a is HistoryListItem.Match && b is HistoryListItem.Match) {
+                        a.result.id == b.result.id
+                    } else false
+                }
+                override fun areContentsTheSame(a: HistoryListItem, b: HistoryListItem): Boolean {
+                    return a == b
+                }
             }
         }
     }

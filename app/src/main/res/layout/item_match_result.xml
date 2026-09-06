@@ -32,6 +32,19 @@
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
+                android:id="@+id/tvItemRound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:alpha="0.8"
+                android:textColor="@color/player_name"
+                android:textSize="12sp"
+                android:textStyle="italic"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/btnItemDelete"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
                 android:id="@+id/tvItemWinner"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
