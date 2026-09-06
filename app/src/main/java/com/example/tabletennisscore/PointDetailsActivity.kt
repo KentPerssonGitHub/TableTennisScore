@@ -233,6 +233,17 @@ class PointDetailsActivity : AppCompatActivity() {
         set.applyTo(headerLayout)
         binding.layoutPointsContainer.addView(headerLayout)
 
+        if (!result.isDataValid) {
+            val warning = TextView(this).apply {
+                text = getString(R.string.history_data_invalid_notice)
+                setTextColor(ContextCompat.getColor(context, R.color.loss_vibrant))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setPadding(16.dp(), 0, 16.dp(), 8.dp())
+                alpha = 0.9f
+            }
+            binding.layoutPointsContainer.addView(warning)
+        }
+
         setsPoints.forEachIndexed { index, pointsStr ->
             val (p1S, p2S) = setStats[index]
             val setFirstServer = currentSetFirstServer(index, result.matchFirstServer)

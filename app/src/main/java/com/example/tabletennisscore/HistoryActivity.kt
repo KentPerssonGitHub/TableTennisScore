@@ -12,7 +12,6 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.TextView
 import android.text.TextUtils
 import androidx.appcompat.app.AlertDialog
@@ -65,6 +64,11 @@ class HistoryActivity : AppCompatActivity() {
         },
         onEditMatchDetails = { result ->
             showEditMatchDetailsDialog(result)
+        },
+        onToggleDataValidity = { result ->
+            lifecycleScope.launch {
+                dao.update(result.copy(isDataValid = !result.isDataValid))
+            }
         },
         onToggleExpand = { tournamentName ->
             if (collapsedTournaments.contains(tournamentName)) {
@@ -192,22 +196,58 @@ class HistoryActivity : AppCompatActivity() {
             roundGrid.addView(rb)
         }
 
+        val dataStatusLabel = TextView(this).apply {
+            text = getString(R.string.history_data_status_label)
+            setPadding(0, 8, 0, 8)
+        }
+        val dataStatusLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val dataOkRb = RadioButton(this).apply {
+            text = getString(R.string.history_data_status_ok_option)
+            isChecked = result.isDataValid
+        }
+        val dataBadRb = RadioButton(this).apply {
+            text = getString(R.string.history_data_status_bad_option)
+            isChecked = !result.isDataValid
+        }
+        dataOkRb.setOnClickListener {
+            dataOkRb.isChecked = true
+            dataBadRb.isChecked = false
+        }
+        dataBadRb.setOnClickListener {
+            dataOkRb.isChecked = false
+            dataBadRb.isChecked = true
+        }
+        dataStatusLayout.addView(dataOkRb)
+        dataStatusLayout.addView(dataBadRb)
+
         layout.addView(p1Edit)
         layout.addView(p2Edit)
         layout.addView(roundLabel)
         layout.addView(roundGrid)
+        layout.addView(dataStatusLabel)
+        layout.addView(dataStatusLayout)
 
         AlertDialog.Builder(this)
-            .setTitle("Edit Match Details")
+            .setTitle(R.string.history_match_details_title)
             .setView(layout)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
                 val p1 = p1Edit.text.toString().trim()
                 val p2 = p2Edit.text.toString().trim()
                 val selectedRb = radioButtons.find { it.isChecked }
                 val selectedRound = selectedRb?.tag as? String ?: ""
+                val isDataValid = dataOkRb.isChecked
                 if (p1.isNotEmpty() && p2.isNotEmpty()) {
                     lifecycleScope.launch {
-                        dao.update(result.copy(player1Name = p1, player2Name = p2, matchRound = selectedRound))
+                        dao.update(
+                            result.copy(
+                                player1Name = p1,
+                                player2Name = p2,
+                                matchRound = selectedRound,
+                                isDataValid = isDataValid,
+                            )
+                        )
                     }
                 }
             }
@@ -242,6 +282,7 @@ class HistoryActivity : AppCompatActivity() {
         private val onDetails: (MatchResult) -> Unit,
         private val onEditTournament: (String, List<MatchResult>) -> Unit,
         private val onEditMatchDetails: (MatchResult) -> Unit,
+        private val onToggleDataValidity: (MatchResult) -> Unit,
         private val onToggleExpand: (String) -> Unit
     ) : ListAdapter<HistoryListItem, RecyclerView.ViewHolder>(DIFF) {
 
@@ -272,7 +313,7 @@ class HistoryActivity : AppCompatActivity() {
             if (holder is HeaderViewHolder && item is HistoryListItem.Header) {
                 holder.bind(item, onEditTournament, onToggleExpand)
             } else if (holder is MatchViewHolder && item is HistoryListItem.Match) {
-                holder.bind(item.result, onDelete, onDetails, onEditMatchDetails)
+                holder.bind(item.result, onDelete, onDetails, onEditMatchDetails, onToggleDataValidity)
             }
         }
 
@@ -300,6 +341,7 @@ class HistoryActivity : AppCompatActivity() {
             private val scoreGrid: LinearLayout = view.findViewById(R.id.layoutItemScoreGrid)
             private val tvDuration: TextView = view.findViewById(R.id.tvItemDuration)
             private val tvDate: TextView = view.findViewById(R.id.tvItemDate)
+            private val tvDataStatus: TextView = view.findViewById(R.id.tvItemDataStatus)
             private val tvRound: TextView = view.findViewById(R.id.tvItemRound)
             private val tvWinner: TextView = view.findViewById(R.id.tvItemWinner)
             private val tvTournament: TextView = view.findViewById(R.id.tvItemTournament)
@@ -313,7 +355,8 @@ class HistoryActivity : AppCompatActivity() {
                 result: MatchResult, 
                 onDelete: (MatchResult) -> Unit, 
                 onDetails: (MatchResult) -> Unit,
-                onEditMatchDetails: (MatchResult) -> Unit
+                onEditMatchDetails: (MatchResult) -> Unit,
+                onToggleDataValidity: (MatchResult) -> Unit,
             ) {
                 val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
                 val loserName = if (result.winner == 1) result.player2Name else result.player1Name
@@ -323,7 +366,18 @@ class HistoryActivity : AppCompatActivity() {
                 tvWinner.text = itemView.context.getString(R.string.history_winner_only, winnerName)
                 tvDuration.text = formatDuration(result.durationMs)
                 tvDate.text = dateFormat.format(Date(result.playedAt))
-                
+                tvDataStatus.text = itemView.context.getString(
+                    if (result.isDataValid) R.string.history_data_status_ok else R.string.history_data_status_bad
+                )
+                tvDataStatus.setTextColor(
+                    ContextCompat.getColor(
+                        itemView.context,
+                        if (result.isDataValid) R.color.win_vibrant else R.color.loss_vibrant,
+                    )
+                )
+                tvDataStatus.alpha = 0.95f
+                tvDataStatus.setOnClickListener { onToggleDataValidity(result) }
+
                 tvRound.text = if (result.matchRound.isNotBlank()) "· ${result.matchRound}" else ""
                 tvRound.visibility = if (result.matchRound.isNotBlank()) View.VISIBLE else View.GONE
 

@@ -76,6 +76,12 @@
     <string name="history_edit_player2">Edit player 2</string>
     <string name="history_match_details_title">Edit match details</string>
     <string name="history_round_label">Round</string>
+    <string name="history_data_status_label">Data quality</string>
+    <string name="history_data_status_ok">OK</string>
+    <string name="history_data_status_bad">Bad data</string>
+    <string name="history_data_status_ok_option">Data inserted correctly</string>
+    <string name="history_data_status_bad_option">Data inserted incorrectly</string>
+    <string name="history_data_invalid_notice">Marked as incorrect data. Serve stats may be unreliable.</string>
     <string name="round_group">group</string>
     <string name="round_32">32</string>
     <string name="round_16">16</string>
