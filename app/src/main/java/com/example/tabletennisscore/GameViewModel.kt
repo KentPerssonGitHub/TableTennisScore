@@ -377,10 +377,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         pushHistory()
         val totalPoints = score1 + score2
         val server = nextServer(score1, score2, totalPoints, currentSetFirstServer(current.setResults.size))
+        val editedDoubles = recalculateDoublesOrderForCurrentSetEdit(
+            state = current,
+            editedScore1 = score1,
+            editedScore2 = score2,
+            editedCompletedSetCount = current.setResults.size,
+        )
         _state.value = current.copy(
+            player1Name = editedDoubles?.player1Name ?: current.player1Name,
+            player2Name = editedDoubles?.player2Name ?: current.player2Name,
             score1 = score1,
             score2 = score2,
             server = server,
+            team1PlayerA = editedDoubles?.team1PlayerA ?: current.team1PlayerA,
+            team1PlayerB = editedDoubles?.team1PlayerB ?: current.team1PlayerB,
+            team2PlayerA = editedDoubles?.team2PlayerA ?: current.team2PlayerA,
+            team2PlayerB = editedDoubles?.team2PlayerB ?: current.team2PlayerB,
         )
         return true
     }
@@ -399,6 +411,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         if (isMatchWon(sets1, sets2, current.bestOfSets)) return false
 
         pushHistory()
+        val editedDoubles = recalculateDoublesOrderForCurrentSetEdit(
+            state = current,
+            editedScore1 = currentScore1,
+            editedScore2 = currentScore2,
+            editedCompletedSetCount = setResults.size,
+        )
+        val editedPlayer1Name = editedDoubles?.player1Name ?: current.player1Name
+        val editedPlayer2Name = editedDoubles?.player2Name ?: current.player2Name
+        val editedTeam1A = editedDoubles?.team1PlayerA ?: current.team1PlayerA
+        val editedTeam1B = editedDoubles?.team1PlayerB ?: current.team1PlayerB
+        val editedTeam2A = editedDoubles?.team2PlayerA ?: current.team2PlayerA
+        val editedTeam2B = editedDoubles?.team2PlayerB ?: current.team2PlayerB
 
         if (isSetWon(currentScore1, currentScore2)) {
             // Current set score is a finished set — finalize it
@@ -417,8 +441,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             if (matchWinner != null) {
                 saveMatchResult(
                     tournamentName = current.tournamentName,
-                    player1Name = current.player1Name,
-                    player2Name = current.player2Name,
+                    player1Name = editedPlayer1Name,
+                    player2Name = editedPlayer2Name,
                     matchMode = sanitizeMatchMode(current.matchMode),
                     sets1 = finalSets1,
                     sets2 = finalSets2,
@@ -431,6 +455,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             _state.value = current.copy(
+                player1Name = editedPlayer1Name,
+                player2Name = editedPlayer2Name,
                 score1 = 0,
                 score2 = 0,
                 sets1 = finalSets1,
@@ -445,6 +471,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 awaitingDecidingSetSwapConfirmation = false,
                 resumeAfterDecidingSetSwapConfirmation = false,
                 matchRound = current.matchRound,
+                team1PlayerA = editedTeam1A,
+                team1PlayerB = editedTeam1B,
+                team2PlayerA = editedTeam2A,
+                team2PlayerB = editedTeam2B,
             )
         } else {
             val server = nextServer(
@@ -467,6 +497,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val manualPointHistory = setResults.map { emptyList<Int>() } + listOf(emptyList())
 
             _state.value = current.copy(
+                player1Name = editedPlayer1Name,
+                player2Name = editedPlayer2Name,
                 score1 = currentScore1,
                 score2 = currentScore2,
                 sets1 = sets1,
@@ -479,6 +511,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 decidingSetSwapNoticeVersion = updatedNoticeVersion,
                 awaitingDecidingSetSwapConfirmation = shouldSwapAtFive,
                 resumeAfterDecidingSetSwapConfirmation = false,
+                team1PlayerA = editedTeam1A,
+                team1PlayerB = editedTeam1B,
+                team2PlayerA = editedTeam2A,
+                team2PlayerB = editedTeam2B,
             )
         }
         return true
@@ -757,6 +793,111 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private fun pushHistory() {
         if (history.size >= 50) history.removeFirst()
         history.addLast(current)
+    }
+
+    private data class DoublesOrder(
+        val team1PlayerA: String,
+        val team1PlayerB: String,
+        val team2PlayerA: String,
+        val team2PlayerB: String,
+        val player1Name: String,
+        val player2Name: String,
+    )
+
+    private fun recalculateDoublesOrderForCurrentSetEdit(
+        state: GameState,
+        editedScore1: Int,
+        editedScore2: Int,
+        editedCompletedSetCount: Int,
+    ): DoublesOrder? {
+        if (state.matchMode != MATCH_MODE_DOUBLES) return null
+        if (editedCompletedSetCount != state.setResults.size) return null
+
+        val firstServer = currentSetFirstServer(editedCompletedSetCount)
+        val (oldTeam1ServiceTurns, oldTeam2ServiceTurns) = countCompletedServiceTurnsByTeam(
+            score1 = state.score1,
+            score2 = state.score2,
+            firstServer = firstServer,
+        )
+
+        var setStartTeam1A = state.team1PlayerA
+        var setStartTeam1B = state.team1PlayerB
+        var setStartTeam2A = state.team2PlayerA
+        var setStartTeam2B = state.team2PlayerB
+
+        if (oldTeam1ServiceTurns % 2 != 0) {
+            setStartTeam1A = state.team1PlayerB
+            setStartTeam1B = state.team1PlayerA
+        }
+        if (oldTeam2ServiceTurns % 2 != 0) {
+            setStartTeam2A = state.team2PlayerB
+            setStartTeam2B = state.team2PlayerA
+        }
+
+        val (newTeam1ServiceTurns, newTeam2ServiceTurns) = countCompletedServiceTurnsByTeam(
+            score1 = editedScore1,
+            score2 = editedScore2,
+            firstServer = firstServer,
+        )
+
+        var editedTeam1A = setStartTeam1A
+        var editedTeam1B = setStartTeam1B
+        var editedTeam2A = setStartTeam2A
+        var editedTeam2B = setStartTeam2B
+
+        if (newTeam1ServiceTurns % 2 != 0) {
+            editedTeam1A = setStartTeam1B
+            editedTeam1B = setStartTeam1A
+        }
+        if (newTeam2ServiceTurns % 2 != 0) {
+            editedTeam2A = setStartTeam2B
+            editedTeam2B = setStartTeam2A
+        }
+
+        return DoublesOrder(
+            team1PlayerA = editedTeam1A,
+            team1PlayerB = editedTeam1B,
+            team2PlayerA = editedTeam2A,
+            team2PlayerB = editedTeam2B,
+            player1Name = composeDoublesTeamName(editedTeam1A, editedTeam1B),
+            player2Name = composeDoublesTeamName(editedTeam2A, editedTeam2B),
+        )
+    }
+
+    private fun countCompletedServiceTurnsByTeam(score1: Int, score2: Int, firstServer: Int): Pair<Int, Int> {
+        val totalPoints = score1 + score2
+        if (totalPoints <= 0) return 0 to 0
+
+        var previousServer = firstServer
+        var team1ServiceTurns = 0
+        var team2ServiceTurns = 0
+        val isDeucePhase = score1 >= 10 && score2 >= 10
+
+        for (pointIndex in 1..totalPoints) {
+            val simulatedScore1: Int
+            val simulatedScore2: Int
+            if (isDeucePhase && pointIndex >= 20) {
+                simulatedScore1 = 10 + (pointIndex - 20)
+                simulatedScore2 = 10
+            } else {
+                simulatedScore1 = 0
+                simulatedScore2 = pointIndex
+            }
+
+            val currentServer = nextServer(
+                s1 = simulatedScore1,
+                s2 = simulatedScore2,
+                total = pointIndex,
+                firstServer = firstServer,
+            )
+
+            if (currentServer != previousServer) {
+                if (previousServer == 1) team1ServiceTurns++ else team2ServiceTurns++
+            }
+            previousServer = currentServer
+        }
+
+        return team1ServiceTurns to team2ServiceTurns
     }
 
     private fun currentSetFirstServer(completedSetCount: Int): Int {

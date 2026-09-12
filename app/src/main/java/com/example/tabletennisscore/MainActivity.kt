@@ -218,15 +218,17 @@ class MainActivity : AppCompatActivity() {
                 val density = resources.displayMetrics.density
                 val iconSize = (14 * density).toInt()
                 val verticalOffsetPx = (4 * density).toInt()
+                val trailingHorizontalOffsetPx = (12 * density).toInt()
+                val gap = "   "
                 val ball = ContextCompat.getDrawable(this@MainActivity, R.drawable.stigaperform40size128)
-                if (ball == null) return if (placeAtEnd) "$name o" else "o $name"
+                if (ball == null) return if (placeAtEnd) "$name  o" else "o  $name"
                 ball.setBounds(0, 0, iconSize, iconSize)
                 val firstLineEnd = name.indexOf('\n').let { if (it >= 0) it else name.length }
                 val text = if (placeAtEnd) {
                     // Keep right-side icon on the first line so both sides sit at the same height.
-                    name.substring(0, firstLineEnd) + "  " + name.substring(firstLineEnd)
+                    name.substring(0, firstLineEnd) + gap + name.substring(firstLineEnd)
                 } else {
-                    "  $name"
+                    "$gap$name"
                 }
                 val spanStart = if (placeAtEnd) firstLineEnd else 0
                 return SpannableStringBuilder(text).apply {
@@ -245,7 +247,8 @@ class MainActivity : AppCompatActivity() {
                             val d = drawable
                             canvas.save()
                             val transY = bottom - d.bounds.bottom - verticalOffsetPx
-                            canvas.translate(x, transY.toFloat())
+                            val transX = if (placeAtEnd) x + trailingHorizontalOffsetPx else x
+                            canvas.translate(transX, transY.toFloat())
                             d.draw(canvas)
                             canvas.restore()
                         }
