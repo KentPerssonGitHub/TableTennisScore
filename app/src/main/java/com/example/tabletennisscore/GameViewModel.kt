@@ -29,11 +29,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = MatchDatabase.getInstance(application).matchResultDao()
 
     companion object {
-        const val MAX_PLAYER_NAME_LENGTH = 20
+        const val MAX_PLAYER_NAME_LENGTH = 30
         const val MAX_TOURNAMENT_NAME_LENGTH = 40
         const val MATCH_MODE_SINGLES = "SINGLES"
         const val MATCH_MODE_DOUBLES = "DOUBLES"
         private const val PREFS_NAME = "table_tennis_prefs"
+        private const val KEY_SINGLES_PLAYER1_NAME = "singles_p1_name"
+        private const val KEY_SINGLES_PLAYER2_NAME = "singles_p2_name"
+        private const val KEY_DOUBLES_TEAM1_PLAYER_A = "doubles_t1_a"
+        private const val KEY_DOUBLES_TEAM1_PLAYER_B = "doubles_t1_b"
+        private const val KEY_DOUBLES_TEAM2_PLAYER_A = "doubles_t2_a"
+        private const val KEY_DOUBLES_TEAM2_PLAYER_B = "doubles_t2_b"
         private const val KEY_PLAYER1_NAME = "p1_name"
         private const val KEY_PLAYER2_NAME = "p2_name"
         private const val KEY_PLAYER_NAME_GROUP = "player_name_group_json"
@@ -75,9 +81,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _state = MutableLiveData(
         GameState(
-            player1Name = prefs.getString(KEY_PLAYER1_NAME, "Player 1") ?: "Player 1",
-            player2Name = prefs.getString(KEY_PLAYER2_NAME, "Player 2") ?: "Player 2",
-            tournamentName = prefs.getString(KEY_TOURNAMENT_NAME, "") ?: ""
+            player1Name = prefs.getString(
+                KEY_SINGLES_PLAYER1_NAME,
+                prefs.getString(KEY_PLAYER1_NAME, "Player 1") ?: "Player 1",
+            ) ?: "Player 1",
+            player2Name = prefs.getString(
+                KEY_SINGLES_PLAYER2_NAME,
+                prefs.getString(KEY_PLAYER2_NAME, "Player 2") ?: "Player 2",
+            ) ?: "Player 2",
+            tournamentName = prefs.getString(KEY_TOURNAMENT_NAME, "") ?: "",
+            team1PlayerA = prefs.getString(KEY_DOUBLES_TEAM1_PLAYER_A, "") ?: "",
+            team1PlayerB = prefs.getString(KEY_DOUBLES_TEAM1_PLAYER_B, "") ?: "",
+            team2PlayerA = prefs.getString(KEY_DOUBLES_TEAM2_PLAYER_A, "") ?: "",
+            team2PlayerB = prefs.getString(KEY_DOUBLES_TEAM2_PLAYER_B, "") ?: "",
         )
     )
     val state: LiveData<GameState> = _state
@@ -191,6 +207,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var decidingSetSwapNoticeVersion = s.decidingSetSwapNoticeVersion
         var awaitingDecidingSetSwapConfirmation = s.awaitingDecidingSetSwapConfirmation
         var resumeAfterDecidingSetSwapConfirmation = s.resumeAfterDecidingSetSwapConfirmation
+        var team1PlayerA = s.team1PlayerA
+        var team1PlayerB = s.team1PlayerB
+        var team2PlayerA = s.team2PlayerA
+        var team2PlayerB = s.team2PlayerB
+        var player1Name = s.player1Name
+        var player2Name = s.player2Name
         val setResults = s.setResults.toMutableList()
         val newPointHistory = s.pointHistory.map { it.toMutableList() }.toMutableList()
 
@@ -214,6 +236,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val totalPoints = score1 + score2
         var server = nextServer(score1, score2, totalPoints, currentSetFirstServer(s.setResults.size))
 
+        // In doubles, rotate the in-team server order whenever that team's service turn ends.
+        if (s.matchMode == MATCH_MODE_DOUBLES && server != s.server) {
+            if (s.server == 1) {
+                val previousTop = team1PlayerA
+                team1PlayerA = team1PlayerB
+                team1PlayerB = previousTop
+                player1Name = composeDoublesTeamName(team1PlayerA, team1PlayerB)
+            } else {
+                val previousTop = team2PlayerA
+                team2PlayerA = team2PlayerB
+                team2PlayerB = previousTop
+                player2Name = composeDoublesTeamName(team2PlayerA, team2PlayerB)
+            }
+        }
+
         // Check if set is won
         if (isSetWon(score1, score2)) {
             setResults.add(Pair(score1, score2))
@@ -227,8 +264,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 captureElapsedUntilNow()
                 saveMatchResult(
                     tournamentName = s.tournamentName,
-                    player1Name = s.player1Name,
-                    player2Name = s.player2Name,
+                    player1Name = player1Name,
+                    player2Name = player2Name,
                     matchMode = sanitizeMatchMode(s.matchMode),
                     sets1 = sets1,
                     sets2 = sets2,
@@ -251,6 +288,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         _state.value = s.copy(
+            player1Name = player1Name,
+            player2Name = player2Name,
             score1 = score1,
             score2 = score2,
             sets1 = sets1,
@@ -265,6 +304,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             decidingSetSwapNoticeVersion = decidingSetSwapNoticeVersion,
             awaitingDecidingSetSwapConfirmation = awaitingDecidingSetSwapConfirmation,
             resumeAfterDecidingSetSwapConfirmation = resumeAfterDecidingSetSwapConfirmation,
+            team1PlayerA = team1PlayerA,
+            team1PlayerB = team1PlayerB,
+            team2PlayerA = team2PlayerA,
+            team2PlayerB = team2PlayerB,
         )
         saveMatchInProgress()
     }
@@ -483,8 +526,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         prefs.edit {
-            putString(KEY_PLAYER1_NAME, sP1Name)
-            putString(KEY_PLAYER2_NAME, sP2Name)
+            if (sanitizedMode == MATCH_MODE_DOUBLES) {
+                putString(KEY_DOUBLES_TEAM1_PLAYER_A, sTeam1A)
+                putString(KEY_DOUBLES_TEAM1_PLAYER_B, sTeam1B)
+                putString(KEY_DOUBLES_TEAM2_PLAYER_A, sTeam2A)
+                putString(KEY_DOUBLES_TEAM2_PLAYER_B, sTeam2B)
+            } else {
+                putString(KEY_SINGLES_PLAYER1_NAME, sP1Name)
+                putString(KEY_SINGLES_PLAYER2_NAME, sP2Name)
+                // Keep legacy keys updated for backward compatibility with older builds.
+                putString(KEY_PLAYER1_NAME, sP1Name)
+                putString(KEY_PLAYER2_NAME, sP2Name)
+            }
         }
         addPlayerNameToGroup(sP1Name)
         addPlayerNameToGroup(sP2Name)
@@ -515,10 +568,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val trimmed = sanitizePlayerName(name, if (player == 1) "Player 1" else "Player 2")
         addPlayerNameToGroup(trimmed)
         _state.value = if (player == 1) {
-            prefs.edit { putString(KEY_PLAYER1_NAME, trimmed) }
+            prefs.edit {
+                if (current.matchMode == MATCH_MODE_SINGLES) {
+                    putString(KEY_SINGLES_PLAYER1_NAME, trimmed)
+                    putString(KEY_PLAYER1_NAME, trimmed)
+                }
+            }
             current.copy(player1Name = trimmed)
         } else {
-            prefs.edit { putString(KEY_PLAYER2_NAME, trimmed) }
+            prefs.edit {
+                if (current.matchMode == MATCH_MODE_SINGLES) {
+                    putString(KEY_SINGLES_PLAYER2_NAME, trimmed)
+                    putString(KEY_PLAYER2_NAME, trimmed)
+                }
+            }
             current.copy(player2Name = trimmed)
         }
     }
@@ -539,14 +602,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         addPlayerNameToGroup(composedTeamName)
 
         _state.value = if (player == 1) {
-            prefs.edit { putString(KEY_PLAYER1_NAME, composedTeamName) }
+            prefs.edit {
+                putString(KEY_DOUBLES_TEAM1_PLAYER_A, sanitizedA)
+                putString(KEY_DOUBLES_TEAM1_PLAYER_B, sanitizedB)
+            }
             current.copy(
                 player1Name = composedTeamName,
                 team1PlayerA = sanitizedA,
                 team1PlayerB = sanitizedB,
             )
         } else {
-            prefs.edit { putString(KEY_PLAYER2_NAME, composedTeamName) }
+            prefs.edit {
+                putString(KEY_DOUBLES_TEAM2_PLAYER_A, sanitizedA)
+                putString(KEY_DOUBLES_TEAM2_PLAYER_B, sanitizedB)
+            }
             current.copy(
                 player2Name = composedTeamName,
                 team2PlayerA = sanitizedA,

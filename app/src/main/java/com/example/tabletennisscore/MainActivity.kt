@@ -4,11 +4,15 @@ import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.os.Handler
 import android.text.InputFilter
+import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.InputType
+import android.text.style.ImageSpan
 import android.os.Bundle
 import android.os.Looper
 import android.util.TypedValue
@@ -205,11 +209,53 @@ class MainActivity : AppCompatActivity() {
         viewModel.state.observe(this) { state ->
             val p1OnLeft = !state.sidesSwapped
             val isDoubles = state.matchMode == GameViewModel.MATCH_MODE_DOUBLES
+            val leftServing = (p1OnLeft && state.server == 1) || (!p1OnLeft && state.server == 2)
             fun formatDisplayName(name: String): String {
                 return if (isDoubles) name.replace(" / ", "\n") else name
             }
-            binding.tvPlayer1Name.text = formatDisplayName(if (p1OnLeft) state.player1Name else state.player2Name)
-            binding.tvPlayer2Name.text = formatDisplayName(if (p1OnLeft) state.player2Name else state.player1Name)
+            fun withServeBall(name: String, showBall: Boolean, placeAtEnd: Boolean = false): CharSequence {
+                if (!showBall) return name
+                val density = resources.displayMetrics.density
+                val iconSize = (14 * density).toInt()
+                val verticalOffsetPx = (4 * density).toInt()
+                val ball = ContextCompat.getDrawable(this@MainActivity, R.drawable.stigaperform40size128)
+                if (ball == null) return if (placeAtEnd) "$name o" else "o $name"
+                ball.setBounds(0, 0, iconSize, iconSize)
+                val firstLineEnd = name.indexOf('\n').let { if (it >= 0) it else name.length }
+                val text = if (placeAtEnd) {
+                    // Keep right-side icon on the first line so both sides sit at the same height.
+                    name.substring(0, firstLineEnd) + "  " + name.substring(firstLineEnd)
+                } else {
+                    "  $name"
+                }
+                val spanStart = if (placeAtEnd) firstLineEnd else 0
+                return SpannableStringBuilder(text).apply {
+                    setSpan(object : ImageSpan(ball, ImageSpan.ALIGN_BOTTOM) {
+                        override fun draw(
+                            canvas: Canvas,
+                            text: CharSequence,
+                            start: Int,
+                            end: Int,
+                            x: Float,
+                            top: Int,
+                            y: Int,
+                            bottom: Int,
+                            paint: Paint,
+                        ) {
+                            val d = drawable
+                            canvas.save()
+                            val transY = bottom - d.bounds.bottom - verticalOffsetPx
+                            canvas.translate(x, transY.toFloat())
+                            d.draw(canvas)
+                            canvas.restore()
+                        }
+                    }, spanStart, spanStart + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+            val leftName = formatDisplayName(if (p1OnLeft) state.player1Name else state.player2Name)
+            val rightName = formatDisplayName(if (p1OnLeft) state.player2Name else state.player1Name)
+            binding.tvPlayer1Name.text = withServeBall(leftName, isDoubles && leftServing)
+            binding.tvPlayer2Name.text = withServeBall(rightName, isDoubles && !leftServing, placeAtEnd = true)
             val playerNameTextSizeSp = if (isDoubles) 16f else 22f
             binding.tvPlayer1Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
             binding.tvPlayer2Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
@@ -247,7 +293,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Serve indicator follows the player, not the side
-            val leftServing = (p1OnLeft && state.server == 1) || (!p1OnLeft && state.server == 2)
             binding.ivServe1.visibility = if (leftServing) View.VISIBLE else View.INVISIBLE
             binding.ivServe2.visibility = if (!leftServing) View.VISIBLE else View.INVISIBLE
 
