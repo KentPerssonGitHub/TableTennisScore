@@ -29,6 +29,16 @@
     <string name="dialog_hint_name">Player name</string>
     <string name="dialog_serve_label">Serve</string>
     <string name="dialog_best_of_sets">Best of sets</string>
+    <string name="dialog_match_mode">Match mode</string>
+    <string name="dialog_mode_singles">Singles</string>
+    <string name="dialog_mode_doubles">Doubles</string>
+    <string name="dialog_doubles_team_names">Doubles players</string>
+    <string name="dialog_team1_player_a_hint">Team 1 - Player A</string>
+    <string name="dialog_team1_player_b_hint">Team 1 - Player B</string>
+    <string name="dialog_team2_player_a_hint">Team 2 - Player A</string>
+    <string name="dialog_team2_player_b_hint">Team 2 - Player B</string>
+    <string name="dialog_swap_partners">Swap partners</string>
+    <string name="dialog_swap_teams">Swap teams</string>
     <string name="score_sets_format">%1$d – %2$d</string>
     <string name="dialog_server_player1">Player 1 serves</string>
     <string name="dialog_server_player2">Player 2 serves</string>

@@ -31,6 +31,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         const val MAX_PLAYER_NAME_LENGTH = 20
         const val MAX_TOURNAMENT_NAME_LENGTH = 40
+        const val MATCH_MODE_SINGLES = "SINGLES"
+        const val MATCH_MODE_DOUBLES = "DOUBLES"
         private const val PREFS_NAME = "table_tennis_prefs"
         private const val KEY_PLAYER1_NAME = "p1_name"
         private const val KEY_PLAYER2_NAME = "p2_name"
@@ -62,6 +64,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val resumeAfterDecidingSetSwapConfirmation: Boolean = false,
         val tournamentName: String = "",
         val matchRound: String = "",
+        val matchMode: String = MATCH_MODE_SINGLES,
+        val team1PlayerA: String = "",
+        val team1PlayerB: String = "",
+        val team2PlayerA: String = "",
+        val team2PlayerB: String = "",
     )
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -222,6 +229,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     tournamentName = s.tournamentName,
                     player1Name = s.player1Name,
                     player2Name = s.player2Name,
+                    matchMode = sanitizeMatchMode(s.matchMode),
                     sets1 = sets1,
                     sets2 = sets2,
                     winner = player,
@@ -279,6 +287,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             player1Name = current.player1Name,
             player2Name = current.player2Name,
             tournamentName = current.tournamentName,
+            matchMode = sanitizeMatchMode(current.matchMode),
+            team1PlayerA = current.team1PlayerA,
+            team1PlayerB = current.team1PlayerB,
+            team2PlayerA = current.team2PlayerA,
+            team2PlayerB = current.team2PlayerB,
         )
     }
 
@@ -363,6 +376,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     tournamentName = current.tournamentName,
                     player1Name = current.player1Name,
                     player2Name = current.player2Name,
+                    matchMode = sanitizeMatchMode(current.matchMode),
                     sets1 = finalSets1,
                     sets2 = finalSets2,
                     winner = matchWinner,
@@ -427,22 +441,59 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    fun setupMatch(player1Name: String, player2Name: String, firstServer: Int, bestOfSets: Int) {
+    fun setupMatch(
+        player1Name: String,
+        player2Name: String,
+        firstServer: Int,
+        bestOfSets: Int,
+        matchMode: String = MATCH_MODE_SINGLES,
+        team1PlayerA: String = "",
+        team1PlayerB: String = "",
+        team2PlayerA: String = "",
+        team2PlayerB: String = "",
+    ) {
         history.clear()
         matchFirstServer = if (firstServer == 2) 2 else 1
         elapsedPlayedMs = 0L
         runningSinceMs = null
         val validatedBestOf = if (bestOfSets in setOf(1, 3, 5, 7)) bestOfSets else 5
         
-        val sP1Name = sanitizePlayerName(player1Name, "Player 1")
-        val sP2Name = sanitizePlayerName(player2Name, "Player 2")
-        
+        val sanitizedMode = sanitizeMatchMode(matchMode)
+        val sP1Name: String
+        val sP2Name: String
+        val sTeam1A: String
+        val sTeam1B: String
+        val sTeam2A: String
+        val sTeam2B: String
+
+        if (sanitizedMode == MATCH_MODE_DOUBLES) {
+            sTeam1A = sanitizePlayerName(team1PlayerA, "Player 1A")
+            sTeam1B = sanitizePlayerName(team1PlayerB, "Player 1B")
+            sTeam2A = sanitizePlayerName(team2PlayerA, "Player 2A")
+            sTeam2B = sanitizePlayerName(team2PlayerB, "Player 2B")
+            sP1Name = composeDoublesTeamName(sTeam1A, sTeam1B)
+            sP2Name = composeDoublesTeamName(sTeam2A, sTeam2B)
+        } else {
+            sP1Name = sanitizePlayerName(player1Name, "Player 1")
+            sP2Name = sanitizePlayerName(player2Name, "Player 2")
+            sTeam1A = ""
+            sTeam1B = ""
+            sTeam2A = ""
+            sTeam2B = ""
+        }
+
         prefs.edit {
             putString(KEY_PLAYER1_NAME, sP1Name)
             putString(KEY_PLAYER2_NAME, sP2Name)
         }
         addPlayerNameToGroup(sP1Name)
         addPlayerNameToGroup(sP2Name)
+        if (sanitizedMode == MATCH_MODE_DOUBLES) {
+            addPlayerNameToGroup(sTeam1A)
+            addPlayerNameToGroup(sTeam1B)
+            addPlayerNameToGroup(sTeam2A)
+            addPlayerNameToGroup(sTeam2B)
+        }
 
         _state.value = GameState(
             bestOfSets = validatedBestOf,
@@ -450,6 +501,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             player1Name = sP1Name,
             player2Name = sP2Name,
             tournamentName = current.tournamentName,
+            matchMode = sanitizedMode,
+            team1PlayerA = sTeam1A,
+            team1PlayerB = sTeam1B,
+            team2PlayerA = sTeam2A,
+            team2PlayerB = sTeam2B,
             isMatchRunning = false,
             hasMatchStarted = false,
         )
@@ -464,6 +520,38 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             prefs.edit { putString(KEY_PLAYER2_NAME, trimmed) }
             current.copy(player2Name = trimmed)
+        }
+    }
+
+    fun setDoublesTeamNames(player: Int, playerA: String, playerB: String) {
+        if (current.matchMode != MATCH_MODE_DOUBLES) return
+        val (fallbackA, fallbackB) = if (player == 1) {
+            "Player 1A" to "Player 1B"
+        } else {
+            "Player 2A" to "Player 2B"
+        }
+        val sanitizedA = sanitizePlayerName(playerA, fallbackA)
+        val sanitizedB = sanitizePlayerName(playerB, fallbackB)
+        val composedTeamName = composeDoublesTeamName(sanitizedA, sanitizedB)
+
+        addPlayerNameToGroup(sanitizedA)
+        addPlayerNameToGroup(sanitizedB)
+        addPlayerNameToGroup(composedTeamName)
+
+        _state.value = if (player == 1) {
+            prefs.edit { putString(KEY_PLAYER1_NAME, composedTeamName) }
+            current.copy(
+                player1Name = composedTeamName,
+                team1PlayerA = sanitizedA,
+                team1PlayerB = sanitizedB,
+            )
+        } else {
+            prefs.edit { putString(KEY_PLAYER2_NAME, composedTeamName) }
+            current.copy(
+                player2Name = composedTeamName,
+                team2PlayerA = sanitizedA,
+                team2PlayerB = sanitizedB,
+            )
         }
     }
 
@@ -515,9 +603,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return value.trim().replace(Regex("\\s+"), " ")
             .split(" ")
             .filter { it.isNotBlank() }
-            .joinToString(" ") { word -> 
-                word.replaceFirstChar { it.uppercase() } 
+            .joinToString(" ") { word ->
+                word.replaceFirstChar { it.uppercase() }
             }
+    }
+
+    private fun sanitizeMatchMode(value: String?): String {
+        return when (value?.trim()?.uppercase(Locale.ROOT)) {
+            MATCH_MODE_DOUBLES -> MATCH_MODE_DOUBLES
+            else -> MATCH_MODE_SINGLES
+        }
+    }
+
+    private fun composeDoublesTeamName(playerA: String, playerB: String): String {
+        return "$playerA / $playerB"
     }
 
     private fun loadPlayerNameGroup(): List<String> {
@@ -550,6 +649,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         tournamentName: String,
         player1Name: String,
         player2Name: String,
+        matchMode: String,
         sets1: Int,
         sets2: Int,
         winner: Int,
@@ -570,6 +670,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     tournamentName = sanitizeTournamentName(tournamentName),
                     player1Name = player1Name,
                     player2Name = player2Name,
+                    matchMode = sanitizeMatchMode(matchMode),
                     sets1 = sets1,
                     sets2 = sets2,
                     winner = winner,

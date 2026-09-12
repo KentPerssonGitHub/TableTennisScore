@@ -603,6 +603,7 @@ class HistoryActivity : AppCompatActivity() {
         val tournamentName: String? = null,
         val player1Name: String? = null,
         val player2Name: String? = null,
+        val matchMode: String? = null,
         val sets1: Int? = null,
         val sets2: Int? = null,
         val winner: Int? = null,
@@ -627,6 +628,10 @@ class HistoryActivity : AppCompatActivity() {
                 tournamentName = tournamentName?.trim().orEmpty(),
                 player1Name = p1,
                 player2Name = p2,
+                matchMode = when (matchMode?.trim()?.uppercase(Locale.ROOT)) {
+                    GameViewModel.MATCH_MODE_DOUBLES -> GameViewModel.MATCH_MODE_DOUBLES
+                    else -> GameViewModel.MATCH_MODE_SINGLES
+                },
                 sets1 = sets1 ?: 0,
                 sets2 = sets2 ?: 0,
                 winner = winnerSafe,
@@ -647,6 +652,7 @@ class HistoryActivity : AppCompatActivity() {
             tournamentName = tournamentName,
             player1Name = player1Name,
             player2Name = player2Name,
+            matchMode = matchMode,
             sets1 = sets1,
             sets2 = sets2,
             winner = winner,

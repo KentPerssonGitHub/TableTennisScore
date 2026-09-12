@@ -15,6 +15,7 @@ data class MatchResult(
     val tournamentName: String,
     val player1Name: String,
     val player2Name: String,
+    val matchMode: String = "SINGLES",
     val sets1: Int,
     val sets2: Int,
     val winner: Int,         // 1 or 2
