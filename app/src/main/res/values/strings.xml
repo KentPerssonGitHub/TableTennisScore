@@ -39,6 +39,7 @@
     <string name="dialog_team2_player_b_hint">Team 2 - Player B</string>
     <string name="dialog_swap_partners">Swap partners</string>
     <string name="dialog_swap_teams">Swap teams</string>
+    <string name="dialog_swap_top_bottom">Swap top/bottom</string>
     <string name="score_sets_format">%1$d – %2$d</string>
     <string name="dialog_server_player1">Player 1 serves</string>
     <string name="dialog_server_player2">Player 2 serves</string>

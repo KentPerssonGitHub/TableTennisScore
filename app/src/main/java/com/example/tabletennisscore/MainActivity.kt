@@ -783,6 +783,37 @@ class MainActivity : AppCompatActivity() {
         val playerBInput = createNameInput(playerBValue, hintB)
         val playerAGroupButton = createSelectButton(playerAInput)
         val playerBGroupButton = createSelectButton(playerBInput)
+        val swapTopBottomButton = MaterialButton(this).apply {
+            text = getString(R.string.dialog_swap_top_bottom)
+            isAllCaps = false
+            insetTop = 0
+            insetBottom = 0
+            minimumHeight = buttonPx(30)
+            minHeight = buttonPx(30)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(buttonPx(14), buttonPx(2), buttonPx(14), buttonPx(2))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
+            strokeWidth = buttonPx(1)
+            strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.history_loser_text))
+            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            cornerRadius = buttonPx(18)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = buttonPx(4)
+                bottomMargin = buttonPx(8)
+            }
+            setOnClickListener {
+                val topName = playerAInput.text?.toString().orEmpty()
+                val bottomName = playerBInput.text?.toString().orEmpty()
+                playerAInput.setText(bottomName)
+                playerAInput.setSelection(playerAInput.text.length)
+                playerBInput.setText(topName)
+                playerBInput.setSelection(playerBInput.text.length)
+            }
+        }
 
         val dialogContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -790,6 +821,7 @@ class MainActivity : AppCompatActivity() {
             addView(playerAGroupButton)
             addView(playerBInput)
             addView(playerBGroupButton)
+            addView(swapTopBottomButton)
         }
 
         val dialog = AlertDialog.Builder(this)
