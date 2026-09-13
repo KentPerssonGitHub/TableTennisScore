@@ -26,6 +26,13 @@
     <string name="dialog_player2_name">Player 2 name</string>
     <string name="dialog_edit_name_group">Edit name group</string>
     <string name="dialog_name_group_hint">One player name per line</string>
+    <string name="dialog_add_name_hint">Add a player</string>
+    <string name="dialog_add">Add</string>
+    <string name="cd_remove_name">Remove %1$s</string>
+    <string name="name_group_empty">No players yet. Add one below.</string>
+    <string name="name_group_duplicate">%1$s is already in the list</string>
+    <string name="confirm_remove_name_title">Remove player?</string>
+    <string name="confirm_remove_name_message">Remove %1$s from the list?</string>
     <string name="dialog_hint_name">Player name</string>
     <string name="dialog_serve_label">Serve</string>
     <string name="dialog_best_of_sets">Best of sets</string>
