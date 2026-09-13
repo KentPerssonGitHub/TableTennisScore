@@ -742,7 +742,7 @@ class HistoryActivity : AppCompatActivity() {
             private val tvDate: TextView = view.findViewById(R.id.tvItemDate)
             private val tvDataStatus: TextView = view.findViewById(R.id.tvItemDataStatus)
             private val tvRound: TextView = view.findViewById(R.id.tvItemRound)
-            private val tvWinner: TextView = view.findViewById(R.id.tvItemWinner)
+            private val winnerContainer: LinearLayout = view.findViewById(R.id.layoutItemWinner)
             private val tvTournament: TextView = view.findViewById(R.id.tvItemTournament)
             private val btnDelete: View = view.findViewById(R.id.btnItemDelete)
             private val btnDetails: View = view.findViewById(R.id.btnItemDetails)
@@ -762,7 +762,7 @@ class HistoryActivity : AppCompatActivity() {
                 val setResults = parseSetResults(result.setResultsJson)
 
                 renderScoreGrid(result, winnerName, loserName, setResults)
-                tvWinner.text = itemView.context.getString(R.string.history_winner_only, winnerName)
+                renderWinnerHeader(result, winnerName)
                 tvDuration.text = formatDuration(result.durationMs)
                 tvDate.text = dateFormat.format(Date(result.playedAt))
                 tvDataStatus.text = itemView.context.getString(
@@ -877,18 +877,101 @@ class HistoryActivity : AppCompatActivity() {
                 }
             }
 
-            private fun createNameCell(name: String, color: Int, bold: Boolean): TextView {
-                return TextView(itemView.context).apply {
-                    text = name
-                    setTextColor(color)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    if (bold) setTypeface(typeface, Typeface.NORMAL)
-                    // Fixed width keeps the set-count box aligned across 1/3/5/7 set variants.
+            private fun renderWinnerHeader(result: MatchResult, winnerName: String) {
+                winnerContainer.removeAllViews()
+                val isDoubles = result.matchMode == GameViewModel.MATCH_MODE_DOUBLES && winnerName.contains(" / ")
+                if (!isDoubles) {
+                    winnerContainer.orientation = LinearLayout.HORIZONTAL
+                    winnerContainer.gravity = Gravity.CENTER
+                    winnerContainer.addView(TextView(itemView.context).apply {
+                        text = itemView.context.getString(R.string.history_winner_only, winnerName)
+                        setTextColor(ContextCompat.getColor(itemView.context, R.color.score_text))
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                        setTypeface(typeface, Typeface.BOLD)
+                        gravity = Gravity.CENTER
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    })
+                    return
+                }
+
+                winnerContainer.orientation = LinearLayout.HORIZONTAL
+                winnerContainer.gravity = Gravity.CENTER
+
+                winnerContainer.addView(LinearLayout(itemView.context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    )
+
+                    addView(TextView(itemView.context).apply {
+                        text = "🏆"
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                        includeFontPadding = false
+                        gravity = Gravity.CENTER_VERTICAL
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        ).apply {
+                            marginEnd = 8.dp()
+                        }
+                    })
+
+                    addView(createStackedNameBlock(
+                        winnerName,
+                        ContextCompat.getColor(itemView.context, R.color.score_text),
+                        true,
+                        15f,
+                    ))
+                })
+            }
+
+            private fun createNameCell(name: String, color: Int, bold: Boolean): View {
+                val isDoubles = name.contains(" / ")
+                if (!isDoubles) {
+                    return TextView(itemView.context).apply {
+                        text = name
+                        setTextColor(color)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                        if (bold) setTypeface(typeface, Typeface.NORMAL)
+                        layoutParams = LinearLayout.LayoutParams(130.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                            marginEnd = 10.dp()
+                        }
+                    }
+                }
+
+                return createStackedNameBlock(name, color, bold, 13f).apply {
                     layoutParams = LinearLayout.LayoutParams(130.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                         marginEnd = 10.dp()
+                    }
+                }
+            }
+
+            private fun createStackedNameBlock(name: String, color: Int, bold: Boolean, textSizeSp: Float): LinearLayout {
+                val names = name.split(" / ")
+                return LinearLayout(itemView.context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    names.forEach { playerName ->
+                        addView(TextView(itemView.context).apply {
+                            text = playerName
+                            setTextColor(color)
+                            setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+                            includeFontPadding = false
+                            maxLines = 1
+                            ellipsize = TextUtils.TruncateAt.END
+                            gravity = Gravity.START
+                            if (bold) setTypeface(typeface, Typeface.NORMAL)
+                            layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                            )
+                        })
                     }
                 }
             }

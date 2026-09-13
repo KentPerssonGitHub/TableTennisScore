@@ -123,15 +123,66 @@ class PointDetailsActivity : AppCompatActivity() {
 
         // Winner Title
         val winnerName = if (result.winner == 1) result.player1Name else result.player2Name
-        val tvWinner = TextView(this).apply {
-            id = View.generateViewId()
-            text = getString(R.string.history_winner_only, winnerName)
-            setTextColor(ContextCompat.getColor(context, R.color.score_text))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            gravity = Gravity.CENTER
+        val isDoubles = result.matchMode == GameViewModel.MATCH_MODE_DOUBLES
+
+        var winnerViewId: Int? = null
+        if (isDoubles && winnerName.contains(" / ")) {
+            // For doubles, create a horizontal layout with large trophy icon and player names
+            val winnerTeamLayout = LinearLayout(this).apply {
+                id = View.generateViewId()
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            winnerViewId = winnerTeamLayout.id
+
+            // Large trophy icon spanning both player names
+            val tvTrophy = TextView(this).apply {
+                text = "🏆"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
+                includeFontPadding = false
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginEnd = 12.dp()
+                }
+            }
+            winnerTeamLayout.addView(tvTrophy)
+
+            // Vertical layout with player names
+            val playerNamesLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.START
+            }
+
+            val playerNames = winnerName.split(" / ")
+            playerNames.forEach { playerName ->
+                val tvTeamMember = TextView(this).apply {
+                    text = playerName
+                    setTextColor(ContextCompat.getColor(context, R.color.score_text))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    gravity = Gravity.START
+                    includeFontPadding = false
+                }
+                playerNamesLayout.addView(tvTeamMember)
+            }
+
+            winnerTeamLayout.addView(playerNamesLayout)
+            headerLayout.addView(winnerTeamLayout)
+        } else {
+            val tvWinner = TextView(this).apply {
+                id = View.generateViewId()
+                text = getString(R.string.history_winner_only, winnerName)
+                setTextColor(ContextCompat.getColor(context, R.color.score_text))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                gravity = Gravity.CENTER
+            }
+            winnerViewId = tvWinner.id
+            headerLayout.addView(tvWinner)
         }
-        headerLayout.addView(tvWinner)
 
         // Sets Summary
         val tvSetsSummary = TextView(this).apply {
@@ -182,10 +233,20 @@ class PointDetailsActivity : AppCompatActivity() {
             alpha = 0.8f
         }
 
-        playerStatsLayout.addView(if (result.winner == 1) createSmallStat(result.player1Name, p1MatchStats) 
-                                   else createSmallStat(result.player2Name, p2MatchStats))
-        playerStatsLayout.addView(if (result.winner == 1) createSmallStat(result.player2Name, p2MatchStats) 
-                                   else createSmallStat(result.player1Name, p1MatchStats))
+        fun addPlayerStatsLines(playerName: String, stats: ServeStats) {
+            if (isDoubles && playerName.contains(" / ")) {
+                // For doubles, split and add each player separately
+                val playerNames = playerName.split(" / ")
+                playerNames.forEach { name ->
+                    playerStatsLayout.addView(createSmallStat(name, stats))
+                }
+            } else {
+                playerStatsLayout.addView(createSmallStat(playerName, stats))
+            }
+        }
+
+        addPlayerStatsLines(if (result.winner == 1) result.player1Name else result.player2Name, if (result.winner == 1) p1MatchStats else p2MatchStats)
+        addPlayerStatsLines(if (result.winner == 1) result.player2Name else result.player1Name, if (result.winner == 1) p2MatchStats else p1MatchStats)
         statsContainer.addView(playerStatsLayout)
         headerLayout.addView(statsContainer)
 
@@ -194,14 +255,16 @@ class PointDetailsActivity : AppCompatActivity() {
         set.clone(headerLayout)
         
         // Winner -> absolute top center
-        set.connect(tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
-        set.connect(tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
-        set.connect(tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
+        if (winnerViewId != null) {
+            set.connect(winnerViewId, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+            set.connect(winnerViewId, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+            set.connect(winnerViewId, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
 
-        // Sets Summary -> centered under Winner
-        set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
-        set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
-        set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvWinner.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+            // Sets Summary -> centered under Winner
+            set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+            set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+            set.connect(tvSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.TOP, winnerViewId, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+        }
 
         // All Sets Summary -> centered under Sets Summary
         set.connect(tvAllSetsSummary.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
@@ -248,7 +311,7 @@ class PointDetailsActivity : AppCompatActivity() {
             val (p1S, p2S) = setStats[index]
             val setFirstServer = currentSetFirstServer(index, result.matchFirstServer)
             addSetHeaderWithStats(index + 1, p1S, p2S, result.player1Name, result.player2Name, result.winner)
-            addPointsProgression(pointsStr, result.player1Name, result.player2Name, result.winner, setFirstServer)
+            addPointsProgression(pointsStr, result.player1Name, result.player2Name, result.winner, setFirstServer, result.matchMode)
         }
     }
 
@@ -413,34 +476,45 @@ class PointDetailsActivity : AppCompatActivity() {
             alpha = 0.7f
         }
 
-        playerStatsLayout.addView(if (matchWinner == 1) smallStat(p1Name, p1S) else smallStat(p2Name, p2S))
-        playerStatsLayout.addView(if (matchWinner == 1) smallStat(p2Name, p2S) else smallStat(p1Name, p1S))
+        fun addPlayerStatLines(playerName: String, stats: ServeStats, isDoubles: Boolean) {
+            if (isDoubles && playerName.contains(" / ")) {
+                // For doubles, split and add each player separately
+                val playerNames = playerName.split(" / ")
+                playerNames.forEach { name ->
+                    playerStatsLayout.addView(smallStat(name, stats))
+                }
+            } else {
+                playerStatsLayout.addView(smallStat(playerName, stats))
+            }
+        }
+
+        val isDoubles = p1Name.contains(" / ") || p2Name.contains(" / ")
+        addPlayerStatLines(if (matchWinner == 1) p1Name else p2Name, if (matchWinner == 1) p1S else p2S, isDoubles)
+        addPlayerStatLines(if (matchWinner == 1) p2Name else p1Name, if (matchWinner == 1) p2S else p1S, isDoubles)
         statsContainer.addView(playerStatsLayout)
         headerLayout.addView(statsContainer)
 
-        val set = androidx.constraintlayout.widget.ConstraintSet()
+         val set = androidx.constraintlayout.widget.ConstraintSet()
         set.clone(headerLayout)
         
         set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
         set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
         set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
-        set.connect(tvSet.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
-        
+
         // Guideline at same 68% for set stats
         val setStatsGuidelineId = View.generateViewId()
         set.create(setStatsGuidelineId, androidx.constraintlayout.widget.ConstraintSet.VERTICAL_GUIDELINE)
         set.setGuidelinePercent(setStatsGuidelineId, 0.68f)
 
-        // Stats -> start at guideline
+        // Stats -> start at guideline, aligned to top
         set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.START, setStatsGuidelineId, androidx.constraintlayout.widget.ConstraintSet.START)
         set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.TOP, tvSet.id, androidx.constraintlayout.widget.ConstraintSet.TOP)
-        set.connect(statsContainer.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, tvSet.id, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
 
         set.applyTo(headerLayout)
         binding.layoutPointsContainer.addView(headerLayout)
     }
 
-    private fun addPointsProgression(pointsStr: String, p1Name: String, p2Name: String, matchWinner: Int, setFirstServer: Int) {
+    private fun addPointsProgression(pointsStr: String, p1Name: String, p2Name: String, matchWinner: Int, setFirstServer: Int, matchMode: String = "SINGLES") {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(8.dp(), 0, 8.dp(), 12.dp())
@@ -470,7 +544,8 @@ class PointDetailsActivity : AppCompatActivity() {
                 if (topPlayer == 1) p1Name else p2Name, 
                 topPlayer == setFirstServer,
                 if (topPlayer == 1) finalS1 else finalS2,
-                if (topPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
+                if (topPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1,
+                matchMode
             )
         )
         labelsLayout.addView(
@@ -478,7 +553,8 @@ class PointDetailsActivity : AppCompatActivity() {
                 if (bottomPlayer == 1) p1Name else p2Name, 
                 bottomPlayer == setFirstServer,
                 if (bottomPlayer == 1) finalS1 else finalS2,
-                if (bottomPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1
+                if (bottomPlayer == 1) finalS1 > finalS2 else finalS2 > finalS1,
+                matchMode
             )
         )
         container.addView(labelsLayout)
@@ -547,52 +623,125 @@ class PointDetailsActivity : AppCompatActivity() {
     }
 
 
-    private fun createLabelRow(name: String, isFirstServer: Boolean, setScore: Int, isWinner: Boolean): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            // Increased width to 185dp to accommodate larger scores
-            layoutParams = LinearLayout.LayoutParams(185.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
-            setPadding(0, 2.dp(), 0, 2.dp())
+    private fun createLabelRow(name: String, isFirstServer: Boolean, setScore: Int, isWinner: Boolean, matchMode: String = "SINGLES"): View {
+        return if (matchMode == GameViewModel.MATCH_MODE_DOUBLES && name.contains(" / ")) {
+            // For doubles, show one shared serve ball in front of the two-player block.
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(185.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
+                setPadding(0, 2.dp(), 0, 2.dp())
 
-            // Ball icon
-            val ivBall = ImageView(this@PointDetailsActivity).apply {
-                val size = (12 * resources.displayMetrics.density).toInt()
-                layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                    marginEnd = 8.dp() 
-                    topMargin = 1.dp() // Nudge down slightly for better visual alignment
+                val ivBall = ImageView(this@PointDetailsActivity).apply {
+                    val size = (20 * resources.displayMetrics.density).toInt()
+                    layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                        marginEnd = 8.dp()
+                    }
+                    setImageResource(R.drawable.stigaperform40size128)
+                    visibility = if (isFirstServer) View.VISIBLE else View.INVISIBLE
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE
                 }
-                setImageResource(R.drawable.stigaperform40size128)
-                visibility = if (isFirstServer) View.VISIBLE else View.INVISIBLE
-            }
-            addView(ivBall)
+                addView(ivBall)
 
-            // Name
-            val tvName = TextView(this@PointDetailsActivity).apply {
-                val label = "$name: "
-                text = label
-                setTextColor(ContextCompat.getColor(context, R.color.player_name))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                includeFontPadding = false
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            addView(tvName)
+                val namesLayout = LinearLayout(this@PointDetailsActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        1f,
+                    )
+                }
 
-            // Final Score - Highlight winner in blue
-            val tvScore = TextView(this@PointDetailsActivity).apply {
-                val formattedScore = if (setScore < 10) "[ %d]".format(setScore) else "[%d]".format(setScore)
-                text = formattedScore
-                val scoreColor = if (isWinner) ContextCompat.getColor(context, R.color.win_vibrant) 
-                                 else ContextCompat.getColor(context, R.color.loss_muted)
-                setTextColor(scoreColor)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) // Increased from 12f
-                typeface = android.graphics.Typeface.MONOSPACE
-                includeFontPadding = false
-                setPadding(4.dp(), 0, 0, 0)
+                val playerNames = name.split(" / ")
+                playerNames.forEachIndexed { index, playerName ->
+                    namesLayout.addView(
+                        LinearLayout(this@PointDetailsActivity).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            gravity = Gravity.CENTER_VERTICAL
+                            layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                            )
+
+                            val tvName = TextView(this@PointDetailsActivity).apply {
+                                text = "$playerName: "
+                                setTextColor(ContextCompat.getColor(context, R.color.player_name))
+                                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                                includeFontPadding = false
+                                maxLines = 1
+                                ellipsize = android.text.TextUtils.TruncateAt.END
+                                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                            }
+                            addView(tvName)
+
+                            val shouldShowScore = (isWinner && index == playerNames.size - 1) || (!isWinner && index == 0)
+                            if (shouldShowScore) {
+                                val tvScore = TextView(this@PointDetailsActivity).apply {
+                                    text = if (setScore < 10) "[ %d]".format(setScore) else "[%d]".format(setScore)
+                                    val scoreColor = if (isWinner) ContextCompat.getColor(context, R.color.win_vibrant)
+                                    else ContextCompat.getColor(context, R.color.loss_muted)
+                                    setTextColor(scoreColor)
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                                    typeface = android.graphics.Typeface.MONOSPACE
+                                    includeFontPadding = false
+                                    setPadding(4.dp(), 0, 0, 0)
+                                }
+                                addView(tvScore)
+                            }
+                        }
+                    )
+                }
+
+                addView(namesLayout)
             }
-            addView(tvScore)
+        } else {
+            // For singles, use the original single-row layout
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                // Increased width to 185dp to accommodate larger scores
+                layoutParams = LinearLayout.LayoutParams(185.dp(), LinearLayout.LayoutParams.WRAP_CONTENT)
+                setPadding(0, 2.dp(), 0, 2.dp())
+
+                // Ball icon
+                val ivBall = ImageView(this@PointDetailsActivity).apply {
+                    val size = (12 * resources.displayMetrics.density).toInt()
+                    layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                        marginEnd = 8.dp()
+                        topMargin = 1.dp() // Nudge down slightly for better visual alignment
+                    }
+                    setImageResource(R.drawable.stigaperform40size128)
+                    visibility = if (isFirstServer) View.VISIBLE else View.INVISIBLE
+                }
+                addView(ivBall)
+
+                // Name
+                val tvName = TextView(this@PointDetailsActivity).apply {
+                    val label = "$name: "
+                    text = label
+                    setTextColor(ContextCompat.getColor(context, R.color.player_name))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    includeFontPadding = false
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                addView(tvName)
+
+                // Final Score - Highlight winner in blue
+                val tvScore = TextView(this@PointDetailsActivity).apply {
+                    val formattedScore = if (setScore < 10) "[ %d]".format(setScore) else "[%d]".format(setScore)
+                    text = formattedScore
+                    val scoreColor = if (isWinner) ContextCompat.getColor(context, R.color.win_vibrant)
+                                     else ContextCompat.getColor(context, R.color.loss_muted)
+                    setTextColor(scoreColor)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) // Increased from 12f
+                    typeface = android.graphics.Typeface.MONOSPACE
+                    includeFontPadding = false
+                    setPadding(4.dp(), 0, 0, 0)
+                }
+                addView(tvScore)
+            }
         }
     }
 

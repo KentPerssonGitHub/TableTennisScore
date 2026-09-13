@@ -57,14 +57,14 @@
                 app:layout_constraintEnd_toStartOf="@id/btnItemDelete"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <TextView
-                android:id="@+id/tvItemWinner"
+            <LinearLayout
+                android:id="@+id/layoutItemWinner"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:textColor="@color/score_text"
-                android:textSize="15sp"
-                android:textStyle="bold"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
                 android:gravity="center"
+                android:orientation="horizontal"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/tvItemDataStatus"
                 app:layout_constraintStart_toEndOf="@id/tvItemDate"

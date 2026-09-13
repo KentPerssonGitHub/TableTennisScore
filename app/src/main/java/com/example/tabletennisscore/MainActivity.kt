@@ -424,6 +424,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val winnerName = if (state.matchWinner == 1) state.player1Name else state.player2Name
+        val displayWinnerName = winnerName.replace(" / ", "\n")
         val winnerColor = ContextCompat.getColor(this, R.color.summary_winner_text)
         
         binding.matchSummaryPanel.visibility = View.VISIBLE
@@ -431,7 +432,7 @@ class MainActivity : AppCompatActivity() {
         // Hide the controls while the summary is showing to avoid clutter
         binding.centerControlsRow.visibility = View.GONE
         
-        binding.tvMatchSummaryWinner.text = getString(R.string.match_summary_winner, winnerName)
+        binding.tvMatchSummaryWinner.text = getString(R.string.match_summary_winner, displayWinnerName)
         binding.tvMatchSummaryWinner.setTextColor(winnerColor)
         renderMatchSummaryScoreTable(state)
         binding.tvMatchSummaryTime.text = getString(
@@ -533,7 +534,7 @@ class MainActivity : AppCompatActivity() {
             val isWinner = player == state.matchWinner
             val nameColor = if (isWinner) winnerColor else whiteColor
             table.addView(TableRow(this).apply {
-                addView(cell(name, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 90, marginStart = 12, marginEnd = 20))
+                val displayName = name.replace(" / ", "\n"); addView(cell(displayName, 20f, Gravity.START or Gravity.CENTER_VERTICAL, nameColor, bold = false, minW = 90, marginStart = 12, marginEnd = 20))
                 addView(setCountCell(sets.toString(), isWinner))
                 
                 // Add vertical "pillar" separator
@@ -1647,3 +1648,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
+
