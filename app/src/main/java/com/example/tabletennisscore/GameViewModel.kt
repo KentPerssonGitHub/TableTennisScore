@@ -276,7 +276,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     matchFirstServer = matchFirstServer,
                     matchRound = s.matchRound,
                 )
-                // Match over — do NOT swap sides
+                // Match over â€” do NOT swap sides
             } else {
                 sidesSwapped = !sidesSwapped // players switch ends after each set
                 server = currentSetFirstServer(setResults.size)
@@ -425,7 +425,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val editedTeam2B = editedDoubles?.team2PlayerB ?: current.team2PlayerB
 
         if (isSetWon(currentScore1, currentScore2)) {
-            // Current set score is a finished set — finalize it
+            // Current set score is a finished set â€” finalize it
             val setWinner = if (currentScore1 > currentScore2) 1 else 2
             val finalSets1 = sets1 + if (setWinner == 1) 1 else 0
             val finalSets2 = sets2 + if (setWinner == 2) 1 else 0
@@ -705,12 +705,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun normalizeNameInput(value: String): String {
-        return value.trim().replace(Regex("\\s+"), " ")
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { word ->
-                word.replaceFirstChar { it.uppercase() }
-            }
+        return normalizeTitleCaseWords(value)
     }
 
     private fun sanitizeMatchMode(value: String?): String {
@@ -925,17 +920,4 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return sets1 == setsToWin - 1 && sets2 == setsToWin - 1
     }
 
-    private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {
-        // At deuce (10-10 and beyond) service alternates every point
-        return if (s1 >= 10 && s2 >= 10) {
-            val pointsSinceDeuce = (s1 - 10) + (s2 - 10)
-            if (pointsSinceDeuce % 2 == 0) firstServer else otherPlayer(firstServer)
-        } else {
-            // Before deuce: alternate every 2 points
-            val block = total / 2
-            if (block % 2 == 0) firstServer else otherPlayer(firstServer)
-        }
-    }
-
-    private fun otherPlayer(p: Int) = if (p == 1) 2 else 1
 }

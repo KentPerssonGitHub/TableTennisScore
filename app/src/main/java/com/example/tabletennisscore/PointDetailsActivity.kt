@@ -14,9 +14,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.tabletennisscore.data.MatchDatabase
 import com.example.tabletennisscore.data.MatchResult
@@ -33,7 +30,7 @@ class PointDetailsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPointDetailsBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        hideSystemBars()
+        hideSystemBarsImmersive()
 
         val matchId = intent.getIntExtra(EXTRA_MATCH_ID, -1)
         if (matchId == -1) {
@@ -395,17 +392,6 @@ class PointDetailsActivity : AppCompatActivity() {
         return builder
     }
 
-    private fun nextServer(s1: Int, s2: Int, total: Int, firstServer: Int): Int {
-        return if ((s1 >= 10 && s2 >= 10)) {
-            val pointsSinceDeuce = (s1 - 10) + (s2 - 10)
-            if (pointsSinceDeuce % 2 == 0) firstServer else otherPlayer(firstServer)
-        } else {
-            val block = total / 2
-            if (block % 2 == 0) firstServer else otherPlayer(firstServer)
-        }
-    }
-
-    private fun otherPlayer(p: Int) = if (p == 1) 2 else 1
 
     private fun currentSetFirstServer(completedSetCount: Int, matchFirstServer: Int): Int {
         return if (completedSetCount % 2 == 0) matchFirstServer else otherPlayer(matchFirstServer)
@@ -777,15 +763,7 @@ class PointDetailsActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
-    }
-
-    private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        if (hasFocus) hideSystemBarsImmersive()
     }
 
     companion object {

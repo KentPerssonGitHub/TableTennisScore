@@ -37,9 +37,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.graphics.toColorInt
 import com.example.tabletennisscore.databinding.ActivityMainBinding
 import com.google.android.material.button.MaterialButton
@@ -75,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        hideSystemBars()
+        hideSystemBarsImmersive()
 
         setupClickListeners()
         observeState()
@@ -98,15 +95,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
-    }
-
-    private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        if (hasFocus) hideSystemBarsImmersive()
     }
 
     private fun setupClickListeners() {
@@ -402,19 +391,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMatchTimerText() {
         val elapsed = viewModel.getElapsedPlayedMs()
-        binding.tvMatchTimer.text = formatElapsedTime(elapsed)
-    }
-
-    private fun formatElapsedTime(elapsedMs: Long): String {
-        val totalSeconds = elapsedMs / 1000L
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        return if (hours > 0) {
-            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            String.format(Locale.US, "%02d:%02d", minutes, seconds)
-        }
+        binding.tvMatchTimer.text = formatClockDuration(elapsed)
     }
 
     private fun updateMatchSummaryPanel(state: GameViewModel.GameState) {
@@ -437,7 +414,7 @@ class MainActivity : AppCompatActivity() {
         renderMatchSummaryScoreTable(state)
         binding.tvMatchSummaryTime.text = getString(
             R.string.match_summary_time,
-            formatElapsedTime(viewModel.getElapsedPlayedMs()),
+            formatClockDuration(viewModel.getElapsedPlayedMs()),
         )
         binding.matchSummaryPanel.setBackgroundColor("#CC220000".toColorInt())
 
@@ -1613,12 +1590,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sanitizeGroupName(name: String): String {
-        return name.trim()
-            .replace(Regex("\\s+"), " ")
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-            .take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
+        return normalizeTitleCaseWords(name).take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
     }
 
     /**

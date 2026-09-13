@@ -30,9 +30,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -111,7 +108,7 @@ class HistoryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        hideSystemBars()
+        hideSystemBarsImmersive()
 
         binding.rvHistory.layoutManager = LinearLayoutManager(this)
         binding.rvHistory.adapter = adapter
@@ -636,25 +633,12 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun normalizePlayerNameForGroup(value: String): String {
-        return value.trim()
-            .replace(Regex("\\s+"), " ")
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
-            .take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
+        return normalizeTitleCaseWords(value).take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
-    }
-
-    private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        if (hasFocus) hideSystemBarsImmersive()
     }
 
     private data class BackupPayload(
@@ -833,9 +817,9 @@ class HistoryActivity : AppCompatActivity() {
                 renderScoreGrid(result, winnerName, loserName, setResults)
                 renderWinnerHeader(result, winnerName)
                 tvDuration.text = if (result.isProtected) {
-                    itemView.context.getString(R.string.history_duration_protected, formatDuration(result.durationMs))
+                    itemView.context.getString(R.string.history_duration_protected, formatClockDuration(result.durationMs))
                 } else {
-                    formatDuration(result.durationMs)
+                    formatClockDuration(result.durationMs)
                 }
                 tvDate.text = dateFormat.format(Date(result.playedAt))
                 tvDataStatus.text = itemView.context.getString(
@@ -1111,17 +1095,6 @@ class HistoryActivity : AppCompatActivity() {
 
             private fun Int.dp(): Int = (this * density).toInt()
 
-            private fun formatDuration(ms: Long): String {
-                val totalSecs = ms / 1000
-                val hours = totalSecs / 3600
-                val minutes = (totalSecs % 3600) / 60
-                val seconds = totalSecs % 60
-                return if (hours > 0) {
-                    String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
-                } else {
-                    String.format(Locale.US, "%02d:%02d", minutes, seconds)
-                }
-            }
         }
 
         companion object {
