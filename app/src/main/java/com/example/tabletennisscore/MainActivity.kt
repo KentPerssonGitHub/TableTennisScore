@@ -1138,15 +1138,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val namesInfo = TextView(this).apply {
-            text = getString(R.string.dialog_edit_player_names)
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.player_name))
-            alpha = 0.85f
-            setPadding(0, 8, 0, 6)
-        }
-
         val editNameGroupButton = MaterialButton(this).apply {
-            text = getString(R.string.dialog_edit_name_group)
+            text = getString(R.string.dialog_edit_player_names)
             isAllCaps = false
             insetTop = 0
             insetBottom = 0
@@ -1177,7 +1170,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        content.addView(namesInfo)
         content.addView(editNameGroupButton)
 
         val modeSection = LinearLayout(this).apply {
