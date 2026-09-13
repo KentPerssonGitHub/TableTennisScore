@@ -7,7 +7,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [MatchResult::class], version = 7, exportSchema = false)
+@Database(entities = [MatchResult::class], version = 8, exportSchema = false)
 abstract class MatchDatabase : RoomDatabase() {
 
     abstract fun matchResultDao(): MatchResultDao
@@ -49,6 +49,12 @@ abstract class MatchDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE match_results ADD COLUMN isProtected INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: MatchDatabase? = null
 
@@ -66,6 +72,7 @@ abstract class MatchDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
+                        MIGRATION_7_8,
                     )
                     .build()
                     .also { INSTANCE = it }

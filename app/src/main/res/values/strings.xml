@@ -93,6 +93,7 @@
     <string name="history_last_backup_never">Last backup: never</string>
     <string name="history_last_backup_format">Last backup: %1$s</string>
     <string name="history_confirm_delete">Delete this result?</string>
+    <string name="history_confirm_delete_protected">This protected result will be deleted. Are you absolutely sure?</string>
     <string name="history_confirm_clear_all">Delete all match results?</string>
     <string name="history_winner_label">🏆 %1$s  (%2$s vs %3$s)</string>
     <string name="history_winner_only">🏆 %1$s</string>
@@ -104,10 +105,19 @@
     <string name="point_history_set_label">Set %1$d</string>
     <string name="point_history_empty">No point history available for this match.</string>
     <string name="history_edit_tournament">Edit tournament</string>
+    <string name="history_tournament_protect_all">Protect all matches in this tournament</string>
+    <string name="history_tournament_unprotect_all">Unprotect all matches in this tournament</string>
+    <string name="history_tournament_name_default">No Tournament</string>
     <string name="history_edit_player1">Edit player 1</string>
     <string name="history_edit_player2">Edit player 2</string>
     <string name="history_edit_names_required">Both player names are required.</string>
     <string name="history_match_details_title">Edit match details</string>
+    <string name="history_protect_match_checkbox">Protect this match from accidental deletion</string>
+    <string name="history_protected_match_title">Protected match</string>
+    <string name="history_protected_match_message">This match is protected. You can unprotect it first, or continue to a second delete confirmation.</string>
+    <string name="history_unprotect">Unprotect</string>
+    <string name="history_delete_anyway">Delete anyway</string>
+    <string name="history_duration_protected">🔒 %1$s</string>
     <string name="history_round_label">Round</string>
     <string name="history_data_status_label">Data quality</string>
     <string name="history_data_status_ok">OK</string>

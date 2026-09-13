@@ -26,5 +26,6 @@ data class MatchResult(
     val matchFirstServer: Int = 1,
     val matchRound: String = "",
     val isDataValid: Boolean = true,
+    val isProtected: Boolean = false,
     val playedAt: Long = System.currentTimeMillis(),
 )

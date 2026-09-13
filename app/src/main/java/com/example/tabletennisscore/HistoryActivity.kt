@@ -18,6 +18,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -77,13 +78,7 @@ class HistoryActivity : AppCompatActivity() {
 
     private val adapter = MatchHistoryAdapter(
         onDelete = { result ->
-            AlertDialog.Builder(this)
-                .setMessage(getString(R.string.history_confirm_delete))
-                .setPositiveButton(R.string.dialog_ok) { _, _ ->
-                    lifecycleScope.launch { dao.deleteById(result.id) }
-                }
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show()
+            showDeleteMatchDialog(result)
         },
         onDetails = { result ->
             val intent = Intent(this, PointDetailsActivity::class.java).apply {
@@ -91,8 +86,8 @@ class HistoryActivity : AppCompatActivity() {
             }
             startActivity(intent)
         },
-        onEditTournament = { oldName, results ->
-            showEditTournamentDialog(oldName, results)
+        onTournamentActions = { oldName, results ->
+            showTournamentActionsDialog(oldName, results)
         },
         onEditMatchDetails = { result ->
             showEditMatchDetailsDialog(result)
@@ -283,6 +278,68 @@ class HistoryActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showTournamentActionsDialog(tournamentName: String, matchesInGroup: List<MatchResult>) {
+        val allProtected = matchesInGroup.isNotEmpty() && matchesInGroup.all { it.isProtected }
+        val displayName = tournamentName.ifBlank { getString(R.string.history_tournament_name_default) }
+        val options = buildList {
+            add(getString(R.string.history_edit_tournament))
+            add(
+                if (allProtected) getString(R.string.history_tournament_unprotect_all)
+                else getString(R.string.history_tournament_protect_all)
+            )
+        }
+        AlertDialog.Builder(this)
+            .setTitle(displayName)
+            .setItems(options.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> showEditTournamentDialog(tournamentName, matchesInGroup)
+                    1 -> lifecycleScope.launch {
+                        val newProtectedState = !allProtected
+                        matchesInGroup.forEach { match ->
+                            dao.update(match.copy(isProtected = newProtectedState))
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun showDeleteMatchDialog(result: MatchResult) {
+        if (!result.isProtected) {
+            confirmDeleteMatch(result)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.history_protected_match_title)
+            .setMessage(R.string.history_protected_match_message)
+            .setNeutralButton(R.string.history_unprotect) { _, _ ->
+                lifecycleScope.launch {
+                    dao.update(result.copy(isProtected = false))
+                }
+            }
+            .setPositiveButton(R.string.history_delete_anyway) { _, _ ->
+                confirmDeleteMatch(result)
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
+    private fun confirmDeleteMatch(result: MatchResult) {
+        val messageRes = if (result.isProtected) {
+            R.string.history_confirm_delete_protected
+        } else {
+            R.string.history_confirm_delete
+        }
+        AlertDialog.Builder(this)
+            .setMessage(getString(messageRes))
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                lifecycleScope.launch { dao.deleteById(result.id) }
+            }
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .show()
+    }
+
     private fun showEditMatchDetailsDialog(result: MatchResult) {
         val nameGroup = loadPlayerNameGroup()
         val layout = LinearLayout(this).apply {
@@ -447,6 +504,11 @@ class HistoryActivity : AppCompatActivity() {
         val dataStatusLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
+        val protectMatchCheck = CheckBox(this).apply {
+            text = getString(R.string.history_protect_match_checkbox)
+            isChecked = result.isProtected
+            setPadding(0, 12, 0, 8)
+        }
         val dataOkRb = RadioButton(this).apply {
             text = getString(R.string.history_data_status_ok_option)
             isChecked = result.isDataValid
@@ -472,6 +534,7 @@ class HistoryActivity : AppCompatActivity() {
         layout.addView(selectFromGroupP2)
         layout.addView(roundLabel)
         layout.addView(roundGroup)
+        layout.addView(protectMatchCheck)
         layout.addView(dataStatusLabel)
         layout.addView(dataStatusLayout)
 
@@ -495,6 +558,7 @@ class HistoryActivity : AppCompatActivity() {
                         player2Name = p2,
                         matchRound = selectedRound,
                         isDataValid = isDataValid,
+                        isProtected = protectMatchCheck.isChecked,
                     )
                 )
             }
@@ -614,6 +678,7 @@ class HistoryActivity : AppCompatActivity() {
         val matchFirstServer: Int? = null,
         val matchRound: String? = null,
         val isDataValid: Boolean? = null,
+        val isProtected: Boolean? = null,
         val playedAt: Long? = null,
     ) {
         fun toMatchResultOrNull(): MatchResult? {
@@ -642,6 +707,7 @@ class HistoryActivity : AppCompatActivity() {
                 matchFirstServer = if ((matchFirstServer ?: 1) == 2) 2 else 1,
                 matchRound = matchRound.orEmpty(),
                 isDataValid = isDataValid ?: true,
+                isProtected = isProtected ?: false,
                 playedAt = playedAt ?: System.currentTimeMillis(),
             )
         }
@@ -663,6 +729,7 @@ class HistoryActivity : AppCompatActivity() {
             matchFirstServer = matchFirstServer,
             matchRound = matchRound,
             isDataValid = isDataValid,
+            isProtected = isProtected,
             playedAt = playedAt,
         )
     }
@@ -679,7 +746,7 @@ class HistoryActivity : AppCompatActivity() {
     class MatchHistoryAdapter(
         private val onDelete: (MatchResult) -> Unit,
         private val onDetails: (MatchResult) -> Unit,
-        private val onEditTournament: (String, List<MatchResult>) -> Unit,
+        private val onTournamentActions: (String, List<MatchResult>) -> Unit,
         private val onEditMatchDetails: (MatchResult) -> Unit,
         private val onToggleDataValidity: (MatchResult) -> Unit,
         private val onToggleExpand: (String) -> Unit
@@ -710,7 +777,7 @@ class HistoryActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             val item = getItem(position)
             if (holder is HeaderViewHolder && item is HistoryListItem.Header) {
-                holder.bind(item, onEditTournament, onToggleExpand)
+                holder.bind(item, onTournamentActions, onToggleExpand)
             } else if (holder is MatchViewHolder && item is HistoryListItem.Match) {
                 holder.bind(item.result, onDelete, onDetails, onEditMatchDetails, onToggleDataValidity)
             }
@@ -720,8 +787,10 @@ class HistoryActivity : AppCompatActivity() {
             private val tvTournamentName: TextView = view.findViewById(R.id.tvHeaderTournamentName)
             private val ivExpandIcon: ImageView = view.findViewById(R.id.ivHeaderExpandIcon)
             
-            fun bind(header: HistoryListItem.Header, onEdit: (String, List<MatchResult>) -> Unit, onToggle: (String) -> Unit) {
-                tvTournamentName.text = if (header.tournamentName.isBlank()) "No Tournament" else header.tournamentName
+            fun bind(header: HistoryListItem.Header, onActions: (String, List<MatchResult>) -> Unit, onToggle: (String) -> Unit) {
+                val baseName = if (header.tournamentName.isBlank()) itemView.context.getString(R.string.history_tournament_name_default) else header.tournamentName
+                val allProtected = header.matches.isNotEmpty() && header.matches.all { it.isProtected }
+                tvTournamentName.text = if (allProtected) "🔒 $baseName" else baseName
                 
                 // Rotate icon based on state
                 ivExpandIcon.rotation = if (header.isExpanded) 0f else -90f
@@ -730,7 +799,7 @@ class HistoryActivity : AppCompatActivity() {
                     onToggle(header.tournamentName)
                 }
                 itemView.setOnLongClickListener {
-                    onEdit(header.tournamentName, header.matches)
+                    onActions(header.tournamentName, header.matches)
                     true
                 }
             }
@@ -763,7 +832,11 @@ class HistoryActivity : AppCompatActivity() {
 
                 renderScoreGrid(result, winnerName, loserName, setResults)
                 renderWinnerHeader(result, winnerName)
-                tvDuration.text = formatDuration(result.durationMs)
+                tvDuration.text = if (result.isProtected) {
+                    itemView.context.getString(R.string.history_duration_protected, formatDuration(result.durationMs))
+                } else {
+                    formatDuration(result.durationMs)
+                }
                 tvDate.text = dateFormat.format(Date(result.playedAt))
                 tvDataStatus.text = itemView.context.getString(
                     if (result.isDataValid) R.string.history_data_status_ok else R.string.history_data_status_bad
@@ -776,6 +849,7 @@ class HistoryActivity : AppCompatActivity() {
                 )
                 tvDataStatus.alpha = 0.95f
                 tvDataStatus.setOnClickListener { onToggleDataValidity(result) }
+                btnDelete.alpha = if (result.isProtected) 0.55f else 1f
 
                 tvRound.text = if (result.matchRound.isNotBlank()) "· ${result.matchRound}" else ""
                 tvRound.visibility = if (result.matchRound.isNotBlank()) View.VISIBLE else View.GONE
