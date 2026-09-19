@@ -19,6 +19,9 @@
     <string name="dialog_delete_set">Delete</string>
     <string name="dialog_set_label">Set %1$d</string>
     <string name="dialog_current_set_label">Current set</string>
+    <string name="dialog_set_column_header">Set</string>
+    <string name="dialog_edit_score_hint">Tap a number to change it. Use ✕ to remove a finished set.</string>
+    <string name="cd_delete_set">Delete %1$s</string>
     <string name="dialog_setup_match">Setup match</string>
     <string name="dialog_name_group">Players</string>
     <string name="dialog_setup_names_on_main_screen">Player names are edited on the main screen.</string>

@@ -1083,85 +1083,181 @@ class MainActivity : AppCompatActivity() {
         val state = viewModel.state.value ?: return
         if (state.isMatchRunning || state.matchWinner != null || !state.hasMatchStarted) return
 
+        fun dp(value: Float): Int = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value,
+            resources.displayMetrics,
+        ).toInt()
+
+        // Column geometry shared by the header and every set row so everything lines up.
+        val labelWeight = 1.6f
+        val scoreWeight = 1f
+        val deleteColumnWidth = dp(40f)
+        val columnGap = dp(6f)
+        val mutedColor = ContextCompat.getColor(this, R.color.player_name)
+
+        fun labelParams() = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, labelWeight)
+        fun scoreParams() = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, scoreWeight).apply {
+            marginStart = columnGap
+            marginEnd = columnGap
+        }
+
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            val horizontalPadding = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                20f,
-                resources.displayMetrics,
-            ).toInt()
-            val topPadding = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                8f,
-                resources.displayMetrics,
-            ).toInt()
-            setPadding(horizontalPadding, topPadding, horizontalPadding, 0)
+            setPadding(dp(20f), dp(12f), dp(20f), 0)
         }
-        fun buildScoreInput(playerName: String, score: Int): EditText {
+
+        // ----- Header: "Set | <player 1> | <player 2>" -----
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(
+            TextView(this).apply {
+                text = getString(R.string.dialog_set_column_header)
+                setTypeface(null, Typeface.BOLD)
+                textSize = 13f
+                alpha = 0.7f
+            },
+            labelParams(),
+        )
+        listOf(state.player1Name, state.player2Name).forEach { playerName ->
+            header.addView(
+                TextView(this).apply {
+                    text = playerName
+                    setTypeface(null, Typeface.BOLD)
+                    textSize = 13f
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setTextColor(mutedColor)
+                },
+                scoreParams(),
+            )
+        }
+        header.addView(View(this), LinearLayout.LayoutParams(deleteColumnWidth, 1))
+        content.addView(header)
+
+        content.addView(
+            View(this).apply { setBackgroundColor(0x40808080) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1f)).apply {
+                topMargin = dp(6f)
+            },
+        )
+
+        class SetRow(
+            val container: LinearLayout,
+            val label: TextView,
+            val player1Input: EditText,
+            val player2Input: EditText,
+        )
+
+        val completedRows = mutableListOf<SetRow>()
+
+        fun renumberCompletedRows() {
+            completedRows.forEachIndexed { index, row ->
+                row.label.text = getString(R.string.dialog_set_label, index + 1)
+            }
+        }
+
+        fun buildScoreInput(contentDescriptionText: String, score: Int): EditText {
             return EditText(this).apply {
-                hint = playerName
                 setText(score.toString())
                 setSelection(text.length)
+                gravity = Gravity.CENTER
                 inputType = InputType.TYPE_CLASS_NUMBER
+                filters = arrayOf(InputFilter.LengthFilter(3))
+                contentDescription = contentDescriptionText
             }
         }
 
-        val completedSetInputs = mutableListOf<Pair<EditText, EditText>>()
-
-        fun addSetEditorRow(labelText: String, score1: Int, score2: Int, completedSet: Boolean): Pair<EditText, EditText> {
+        fun addSetRow(labelText: String, score1: Int, score2: Int, deletable: Boolean): SetRow {
             val label = TextView(this).apply {
                 text = labelText
-                setTypeface(null, Typeface.NORMAL)
-                setPadding(0, if (completedSet) 12 else 16, 0, 4)
+                setTypeface(null, if (deletable) Typeface.NORMAL else Typeface.BOLD)
+                textSize = 15f
             }
+            val player1Input = buildScoreInput(
+                getString(R.string.dialog_score_player1, state.player1Name),
+                score1,
+            )
+            val player2Input = buildScoreInput(
+                getString(R.string.dialog_score_player2, state.player2Name),
+                score2,
+            )
 
-            val row = LinearLayout(this).apply {
+            val container = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(2f), 0, dp(2f))
+            }
+            container.addView(label, labelParams())
+            container.addView(player1Input, scoreParams())
+            container.addView(player2Input, scoreParams())
+
+            val row = SetRow(container, label, player1Input, player2Input)
+
+            if (deletable) {
+                container.addView(
+                    TextView(this).apply {
+                        text = "✕"
+                        textSize = 16f
+                        gravity = Gravity.CENTER
+                        contentDescription = getString(R.string.cd_delete_set, labelText)
+                        setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                        background = null
+                        isClickable = true
+                        isFocusable = true
+                        setOnClickListener {
+                            content.removeView(container)
+                            completedRows.remove(row)
+                            renumberCompletedRows()
+                        }
+                    },
+                    LinearLayout.LayoutParams(deleteColumnWidth, LinearLayout.LayoutParams.WRAP_CONTENT),
+                )
+            } else {
+                container.addView(View(this), LinearLayout.LayoutParams(deleteColumnWidth, 1))
             }
 
-            val player1Input = buildScoreInput(getString(R.string.dialog_score_player1, state.player1Name), score1)
-            val player2Input = buildScoreInput(getString(R.string.dialog_score_player2, state.player2Name), score2)
-            val player1Params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = 8
-            }
-            val player2Params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = 8
-            }
-
-            row.addView(player1Input, player1Params)
-            row.addView(player2Input, player2Params)
-
-            if (completedSet) {
-                val deleteSet = TextView(this).apply {
-                    text = getString(R.string.dialog_delete_set)
-                    setTypeface(null, Typeface.NORMAL)
-                    setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
-                    setPadding(12, 0, 0, 0)
-                    setOnClickListener {
-                        content.removeView(label)
-                        content.removeView(row)
-                        completedSetInputs.remove(player1Input to player2Input)
-                    }
-                }
-                row.addView(deleteSet)
-            }
-
-            content.addView(label)
-            content.addView(row)
-            return player1Input to player2Input
+            content.addView(container)
+            return row
         }
 
         state.setResults.forEachIndexed { index, set ->
-            completedSetInputs.add(
-                addSetEditorRow(getString(R.string.dialog_set_label, index + 1), set.first, set.second, completedSet = true),
+            completedRows.add(
+                addSetRow(
+                    getString(R.string.dialog_set_label, index + 1),
+                    set.first,
+                    set.second,
+                    deletable = true,
+                ),
             )
         }
 
-        val currentSetInputs = addSetEditorRow(
+        // Separate the in-progress set from the finished ones.
+        content.addView(
+            View(this).apply { setBackgroundColor(0x40808080) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1f)).apply {
+                topMargin = dp(8f)
+                bottomMargin = dp(4f)
+            },
+        )
+
+        val currentSetRow = addSetRow(
             getString(R.string.dialog_current_set_label),
             state.score1,
             state.score2,
-            completedSet = false,
+            deletable = false,
+        )
+
+        content.addView(
+            TextView(this).apply {
+                text = getString(R.string.dialog_edit_score_hint)
+                textSize = 12f
+                alpha = 0.6f
+                setPadding(0, dp(12f), 0, 0)
+            },
         )
 
         val scrollContent = ScrollView(this).apply {
@@ -1172,17 +1268,14 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.dialog_edit_score_title)
             .setView(scrollContent)
             .setPositiveButton(R.string.dialog_ok) { _, _ ->
-                val completedSets = completedSetInputs.map {
-                    val score1 = it.first.text.toString().toIntOrNull() ?: 0
-                    val score2 = it.second.text.toString().toIntOrNull() ?: 0
+                val completedSets = completedRows.map {
+                    val score1 = it.player1Input.text.toString().toIntOrNull() ?: 0
+                    val score2 = it.player2Input.text.toString().toIntOrNull() ?: 0
                     score1 to score2
                 }
-                val currentSet = (
-                    currentSetInputs.first.text.toString().toIntOrNull() ?: 0
-                ) to (
-                    currentSetInputs.second.text.toString().toIntOrNull() ?: 0
-                )
-                if (!viewModel.updatePausedMatchScores(completedSets, currentSet.first, currentSet.second)) {
+                val currentScore1 = currentSetRow.player1Input.text.toString().toIntOrNull() ?: 0
+                val currentScore2 = currentSetRow.player2Input.text.toString().toIntOrNull() ?: 0
+                if (!viewModel.updatePausedMatchScores(completedSets, currentScore1, currentScore2)) {
                     Toast.makeText(this, R.string.error_invalid_manual_score, Toast.LENGTH_SHORT).show()
                 }
             }
