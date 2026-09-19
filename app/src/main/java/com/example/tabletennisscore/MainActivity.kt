@@ -54,6 +54,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
+private const val BALL_ANIMATION_OVER_NET = 70f
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -746,9 +748,11 @@ class MainActivity : AppCompatActivity() {
 
             val density = resources.displayMetrics.density
             val desiredArc = abs(rightX - leftX) * 0.10f
-            val arcHeight = maxOf(18f * density, minOf(52f * density, desiredArc))
-            // Keep the arc apex around the screen middle to avoid drifting too high.
-            val baseCenterY = (binding.rootLayout.height * 0.50f) + arcHeight
+            val tableHitArcHeight = maxOf(18f * density, minOf(52f * density, desiredArc))
+            val netClearanceBoost = BALL_ANIMATION_OVER_NET * density
+            val arcHeight = tableHitArcHeight + netClearanceBoost
+            // Keep the table-hit height unchanged while allowing extra lift over the net.
+            val baseCenterY = (binding.rootLayout.height * 0.50f) + tableHitArcHeight
             val baseY = baseCenterY - (ballHeight / 2f)
 
             binding.glRallyBall.renderer.apply {
