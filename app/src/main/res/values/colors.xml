@@ -19,5 +19,7 @@
     <color name="loss_vibrant">#EF5350</color>
     <color name="menu_button_primary_border">#64B5F6</color>
     <color name="menu_button_primary_ripple">#40FFFFFF</color>
-    <color name="menu_button_secondary_ripple">#30E0E0E0</color>
+    <color name="menu_button_secondary_ripple">#55FFFFFF</color>
+    <color name="menu_button_surface">#B31A1A2E</color>
+    <color name="menu_button_secondary_border">#B3EAF2FF</color>
 </resources>

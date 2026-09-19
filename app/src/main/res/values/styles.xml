@@ -33,6 +33,7 @@
         <item name="android:textSize">15.3sp</item>
         <item name="android:gravity">center</item>
         <item name="android:paddingVertical">10dp</item>
+        <item name="android:paddingHorizontal">14dp</item>
         <item name="android:layout_marginStart">8dp</item>
         <item name="android:layout_marginEnd">8dp</item>
         <item name="android:layout_marginTop">4dp</item>
@@ -43,6 +44,10 @@
 
     <style name="Widget.TableTennisScore.CenterMenuPrimaryAction" parent="@style/Widget.TableTennisScore.CenterMenuAction">
         <item name="android:textColor">@color/score_text</item>
+        <item name="android:shadowColor">#C0000000</item>
+        <item name="android:shadowDx">0</item>
+        <item name="android:shadowDy">1.5</item>
+        <item name="android:shadowRadius">3</item>
     </style>
 
     <style name="Widget.TableTennisScore.CenterMenuSecondaryAction" parent="@style/Widget.TableTennisScore.CenterMenuAction">
