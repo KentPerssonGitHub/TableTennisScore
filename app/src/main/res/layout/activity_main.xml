@@ -22,6 +22,36 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <ImageView
+        android:id="@+id/ivBatLeft"
+        android:layout_width="72dp"
+        android:layout_height="112dp"
+        android:alpha="0.92"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_table_tennis_bat_black"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/divider"
+        app:layout_constraintHorizontal_bias="0.72"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.64" />
+
+    <ImageView
+        android:id="@+id/ivBatRight"
+        android:layout_width="72dp"
+        android:layout_height="112dp"
+        android:alpha="0.92"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleX="-1"
+        android:src="@drawable/ic_table_tennis_bat"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/divider"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.64" />
+
     <!-- ===== LEFT PLAYER (Player 1) ===== -->
     <!-- Player 1 name (long-press to edit) -->
     <TextView

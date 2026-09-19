@@ -79,6 +79,12 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
     
     private var startTime = 0L
     private val duration = 1500L
+    val fullCycleDurationMillis: Long
+        get() = duration * 2
+
+    fun resetAnimationPhase() {
+        startTime = 0L
+    }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0f, 0f, 0f, 0f)

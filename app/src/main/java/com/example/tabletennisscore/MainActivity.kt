@@ -23,6 +23,7 @@ import android.view.View
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import android.view.animation.LinearInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -51,10 +52,15 @@ import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val BALL_ANIMATION_OVER_NET = 70f
+private const val BAT_IDLE_SWING_ANGLE = 52f
+private const val BAT_SWING_ANGLE = 34f
+private const val BAT_SWING_WINDOW = 0.085f
+private const val BAT_HEAD_CENTER_Y_RATIO = 35f / 112f
 
 class MainActivity : AppCompatActivity() {
 
@@ -70,6 +76,8 @@ class MainActivity : AppCompatActivity() {
     private var lastShownDecidingSwapNoticeVersion = 0
     private var decidingSwapSnackbar: Snackbar? = null
     private var previousIsMatchRunning = false
+    private var rallyStartsFromLeft = true
+    private var rallyBatAnimator: ValueAnimator? = null
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerTick = object : Runnable {
         override fun run() {
@@ -85,6 +93,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         hideSystemBarsImmersive()
+        resetRallyBatAngles()
 
         setupClickListeners()
         observeState()
@@ -98,9 +107,13 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.glRallyBall.onResume()
+        if (viewModel.state.value?.isMatchRunning == true) {
+            startRallyBallAnimationIfNeeded()
+        }
     }
 
     override fun onPause() {
+        stopRallyBallAnimation()
         super.onPause()
         binding.glRallyBall.onPause()
     }
@@ -745,6 +758,10 @@ class MainActivity : AppCompatActivity() {
             
             val leftX = leftCenterX - (ballWidth / 2f)
             val rightX = rightCenterX - (ballWidth / 2f)
+            val p1OnLeft = !latestState.sidesSwapped
+            val serverOnLeft = (p1OnLeft && latestState.server == 1) || (!p1OnLeft && latestState.server == 2)
+            val startX = if (serverOnLeft) leftX else rightX
+            val endX = if (serverOnLeft) rightX else leftX
 
             val density = resources.displayMetrics.density
             val desiredArc = abs(rightX - leftX) * 0.10f
@@ -754,21 +771,128 @@ class MainActivity : AppCompatActivity() {
             // Keep the table-hit height unchanged while allowing extra lift over the net.
             val baseCenterY = (binding.rootLayout.height * 0.50f) + tableHitArcHeight
             val baseY = baseCenterY - (ballHeight / 2f)
+            val shouldRestartCycle = !binding.glRallyBall.renderer.isAnimating || rallyStartsFromLeft != serverOnLeft
+
+            updateRallyBatPositions(leftX, rightX, baseY, ballWidth, ballHeight)
+            rallyStartsFromLeft = serverOnLeft
 
             binding.glRallyBall.renderer.apply {
-                this.leftX = leftX
-                this.rightX = rightX
+                if (shouldRestartCycle) {
+                    resetAnimationPhase()
+                }
+                this.leftX = startX
+                this.rightX = endX
                 this.baseY = baseY
                 this.arcHeight = arcHeight
                 this.ballWidth = ballWidth
                 this.ballHeight = ballHeight
                 this.isAnimating = true
             }
+
+            if (shouldRestartCycle || rallyBatAnimator == null) {
+                startRallyBatAnimation()
+            }
         }
     }
 
     private fun stopRallyBallAnimation() {
-        binding.glRallyBall.renderer.isAnimating = false
+        binding.glRallyBall.renderer.apply {
+            isAnimating = false
+            resetAnimationPhase()
+        }
+        stopRallyBatAnimation()
+    }
+
+    private fun updateRallyBatPositions(
+        leftBallX: Float,
+        rightBallX: Float,
+        baseY: Float,
+        ballWidth: Float,
+        ballHeight: Float,
+    ) {
+        val leftHitCenterX = leftBallX + (ballWidth / 2f)
+        val rightHitCenterX = rightBallX + (ballWidth / 2f)
+        val hitCenterY = baseY + (ballHeight / 2f)
+
+        binding.ivBatLeft.apply {
+            val strikeRotation = BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE
+            positionBatForContact(this, leftHitCenterX, hitCenterY, strikeRotation)
+        }
+
+        binding.ivBatRight.apply {
+            val strikeRotation = -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE)
+            positionBatForContact(this, rightHitCenterX, hitCenterY, strikeRotation)
+        }
+
+        if (rallyBatAnimator == null) {
+            resetRallyBatAngles()
+        }
+    }
+
+    private fun positionBatForContact(
+        batView: View,
+        contactCenterX: Float,
+        contactCenterY: Float,
+        strikeRotationDegrees: Float,
+    ) {
+        val pivotX = batView.width * 0.5f
+        val pivotY = batView.height * 0.88f
+        val headCenterX = batView.width * 0.5f
+        val headCenterY = batView.height * BAT_HEAD_CENTER_Y_RATIO
+        val dx = headCenterX - pivotX
+        val dy = headCenterY - pivotY
+        val radians = Math.toRadians(strikeRotationDegrees.toDouble())
+        val rotatedDx = (dx * cos(radians) - dy * sin(radians)).toFloat()
+        val rotatedDy = (dx * sin(radians) + dy * cos(radians)).toFloat()
+
+        batView.pivotX = pivotX
+        batView.pivotY = pivotY
+        batView.x = contactCenterX - pivotX - rotatedDx
+        batView.y = contactCenterY - pivotY - rotatedDy
+    }
+
+    private fun startRallyBatAnimation() {
+        stopRallyBatAnimation()
+        rallyBatAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = binding.glRallyBall.renderer.fullCycleDurationMillis
+            interpolator = LinearInterpolator()
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { animator ->
+                val progress = animator.animatedValue as Float
+                updateRallyBatAngles(progress)
+            }
+            start()
+        }
+    }
+
+    private fun stopRallyBatAnimation() {
+        rallyBatAnimator?.cancel()
+        rallyBatAnimator = null
+        resetRallyBatAngles()
+    }
+
+    private fun resetRallyBatAngles() {
+        binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE
+        binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE
+    }
+
+    private fun updateRallyBatAngles(progress: Float) {
+        val leftStrikePoint = if (rallyStartsFromLeft) 0f else 0.5f
+        val rightStrikePoint = if (rallyStartsFromLeft) 0.5f else 0f
+        val leftSwing = strikePulse(progress, leftStrikePoint)
+        val rightSwing = strikePulse(progress, rightStrikePoint)
+
+        binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftSwing)
+        binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightSwing)
+    }
+
+    private fun strikePulse(progress: Float, strikePoint: Float): Float {
+        val directDistance = abs(progress - strikePoint)
+        val wrappedDistance = minOf(directDistance, 1f - directDistance)
+        if (wrappedDistance >= BAT_SWING_WINDOW) return 0f
+
+        val normalizedDistance = 1f - (wrappedDistance / BAT_SWING_WINDOW)
+        return sin(normalizedDistance * (PI.toFloat() / 2f))
     }
 
 
