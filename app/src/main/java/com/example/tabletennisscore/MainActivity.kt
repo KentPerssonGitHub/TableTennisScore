@@ -63,6 +63,8 @@ class MainActivity : AppCompatActivity() {
     private var activeServeDragView: View? = null
     private var isHandlingServeDrag = false
     private var isDraggingServeBall = false
+    private var lastScoreTouchX = 0f
+    private var lastScoreTouchY = 0f
     private var lastShownDecidingSwapNoticeVersion = 0
     private var decidingSwapSnackbar: Snackbar? = null
     private var previousIsMatchRunning = false
@@ -107,7 +109,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        // Score taps – tap the score area to add a point
+        // Score taps – tap anywhere on a half of the screen to add a point to that player
+        binding.tapAreaLeft.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
+        }
+        binding.tapAreaRight.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
+        }
         binding.tvScore1.setOnClickListener {
             viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
         }
@@ -115,6 +123,46 @@ class MainActivity : AppCompatActivity() {
             viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
         }
 
+        // Long-press directly on the score digits opens the manual score editor.
+        // Touch coordinates are recorded first so the long-press can be limited to the glyphs.
+        val scoreTouchRecorder = View.OnTouchListener { _, event ->
+            lastScoreTouchX = event.x
+            lastScoreTouchY = event.y
+            false
+        }
+        binding.tvScore1.setOnTouchListener(scoreTouchRecorder)
+        binding.tvScore2.setOnTouchListener(scoreTouchRecorder)
+
+        val scoreLongClick = View.OnLongClickListener { view ->
+            val scoreView = view as? TextView ?: return@OnLongClickListener false
+            if (isHandlingServeDrag) return@OnLongClickListener false
+            if (!isTouchOnScoreDigits(scoreView, lastScoreTouchX, lastScoreTouchY)) {
+                return@OnLongClickListener false
+            }
+            val state = viewModel.state.value
+            if (state != null && !state.isMatchRunning && state.matchWinner == null && state.hasMatchStarted) {
+                showEditScoreDialog()
+                true
+            } else {
+                false
+            }
+        }
+        binding.tvScore1.setOnLongClickListener(scoreLongClick)
+        binding.tvScore2.setOnLongClickListener(scoreLongClick)
+
+        // Set boards – tap adds a point to that side, long-press opens the same score/set editor.
+        binding.tvSet1.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
+        }
+        binding.tvSet2.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
+        }
+        val setLongClick = View.OnLongClickListener {
+            if (isHandlingServeDrag) return@OnLongClickListener false
+            openEditScoreDialogIfAllowed()
+        }
+        binding.tvSet1.setOnLongClickListener(setLongClick)
+        binding.tvSet2.setOnLongClickListener(setLongClick)
 
         // Name long-press – long-press name to edit to avoid accidental taps near swap icon
         // A normal tap on the name keeps the usual "add a point" behaviour for that side.
@@ -151,6 +199,32 @@ class MainActivity : AppCompatActivity() {
             true
         }
         setupServeBallDrag()
+    }
+
+    /**
+     * Opens the manual score/set editor when the match is paused mid-way.
+     * Returns true when the dialog was shown so long-press listeners can report consumption.
+     */
+    private fun openEditScoreDialogIfAllowed(): Boolean {
+        val state = viewModel.state.value ?: return false
+        if (state.isMatchRunning || state.matchWinner != null || !state.hasMatchStarted) return false
+        showEditScoreDialog()
+        return true
+    }
+
+    /**
+     * True when the touch point (in [scoreView] coordinates) landed on the rendered digits,
+     * so long-pressing the empty area around the score does nothing.
+     */
+    private fun isTouchOnScoreDigits(scoreView: TextView, touchX: Float, touchY: Float): Boolean {
+        val layout = scoreView.layout ?: return false
+        if (layout.lineCount == 0) return false
+        val slop = 8f * resources.displayMetrics.density
+        val left = scoreView.totalPaddingLeft + layout.getLineLeft(0) - slop
+        val right = scoreView.totalPaddingLeft + layout.getLineRight(0) + slop
+        val top = scoreView.totalPaddingTop + layout.getLineTop(0) - slop
+        val bottom = scoreView.totalPaddingTop + layout.getLineBottom(0) + slop
+        return touchX >= left && touchX <= right && touchY >= top && touchY <= bottom
     }
 
     private fun setupServeBallDrag() {
