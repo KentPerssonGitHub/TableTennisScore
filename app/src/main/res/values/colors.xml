@@ -22,4 +22,10 @@
     <color name="menu_button_secondary_ripple">#55FFFFFF</color>
     <color name="menu_button_surface">#B31A1A2E</color>
     <color name="menu_button_secondary_border">#B3EAF2FF</color>
+    <color name="scoreboard_panel_top">#35383D</color>
+    <color name="scoreboard_panel_bottom">#15171B</color>
+    <color name="scoreboard_panel_border">#5A616A</color>
+    <color name="scoreboard_panel_hinge">#44484E</color>
+    <color name="scoreboard_point_text">#EDF04A</color>
+    <color name="scoreboard_set_text">#F2F5F8</color>
 </resources>

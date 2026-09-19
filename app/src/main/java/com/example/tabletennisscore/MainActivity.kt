@@ -7,6 +7,7 @@ import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
 import android.os.Handler
 import android.text.InputFilter
 import android.text.SpannableStringBuilder
@@ -17,9 +18,11 @@ import android.os.Bundle
 import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -48,6 +51,7 @@ import com.google.android.material.snackbar.Snackbar
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 class MainActivity : AppCompatActivity() {
@@ -56,6 +60,9 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: GameViewModel by viewModels()
     private var serveDragStartRawX = 0f
     private var serveDragStartRawY = 0f
+    private var activeServeDragView: View? = null
+    private var isHandlingServeDrag = false
+    private var isDraggingServeBall = false
     private var lastShownDecidingSwapNoticeVersion = 0
     private var decidingSwapSnackbar: Snackbar? = null
     private var previousIsMatchRunning = false
@@ -108,27 +115,22 @@ class MainActivity : AppCompatActivity() {
             viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
         }
 
-        binding.tvScore1.setOnLongClickListener {
-            val state = viewModel.state.value
-            if (state?.isMatchRunning == false && state.matchWinner == null && state.hasMatchStarted) {
-                showEditScoreDialog()
-                true
-            } else false
-        }
-        binding.tvScore2.setOnLongClickListener {
-            val state = viewModel.state.value
-            if (state?.isMatchRunning == false && state.matchWinner == null && state.hasMatchStarted) {
-                showEditScoreDialog()
-                true
-            } else false
-        }
 
         // Name long-press – long-press name to edit to avoid accidental taps near swap icon
+        // A normal tap on the name keeps the usual "add a point" behaviour for that side.
+        binding.tvPlayer1Name.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
+        }
+        binding.tvPlayer2Name.setOnClickListener {
+            viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
+        }
         binding.tvPlayer1Name.setOnLongClickListener {
+            if (isHandlingServeDrag) return@setOnLongClickListener false
             showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
             true
         }
         binding.tvPlayer2Name.setOnLongClickListener {
+            if (isHandlingServeDrag) return@setOnLongClickListener false
             showEditNameDialog(if (viewModel.state.value?.sidesSwapped == true) 1 else 2)
             true
         }
@@ -152,41 +154,124 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupServeBallDrag() {
-        val dragListener = View.OnTouchListener { view, event ->
+        val density = resources.displayMetrics.density
+        val restingElevation = 10f * density
+        val draggingElevation = restingElevation + (14f * density)
+
+        fun releaseServeDrag(draggedView: View, animateBack: Boolean) {
+            if (animateBack) {
+                draggedView.animate()
+                    .translationX(0f)
+                    .translationY(0f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .alpha(1f)
+                    .setDuration(160)
+                    .withEndAction { draggedView.elevation = restingElevation }
+                    .start()
+            } else {
+                draggedView.animate().cancel()
+                draggedView.translationX = 0f
+                draggedView.translationY = 0f
+                draggedView.scaleX = 1f
+                draggedView.scaleY = 1f
+                draggedView.alpha = 1f
+                draggedView.elevation = restingElevation
+            }
+            activeServeDragView = null
+            isHandlingServeDrag = false
+            isDraggingServeBall = false
+        }
+
+        fun crossedToOtherSide(draggedView: View, rawX: Float): Boolean {
+            val dividerCenterX = binding.rootLayout.width / 2f
+            val ballCenterX = draggedView.left + draggedView.width / 2f + draggedView.translationX
+            val location = IntArray(2)
+            binding.rootLayout.getLocationOnScreen(location)
+            val fingerXInRoot = rawX - location[0]
+            return if (draggedView.id == R.id.ivServe1) {
+                ballCenterX > dividerCenterX || fingerXInRoot > dividerCenterX
+            } else {
+                ballCenterX < dividerCenterX || fingerXInRoot < dividerCenterX
+            }
+        }
+
+        val dragListener = View.OnTouchListener { overlay, event ->
             val state = viewModel.state.value ?: return@OnTouchListener false
             if (state.matchWinner != null) return@OnTouchListener false
-            when (event.action) {
+            when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    val draggedView = findServeIndicatorUnderTouch(event.rawX, event.rawY)
+                        ?: return@OnTouchListener false
+                    // Kill any snap-back animation still running, otherwise it fights the drag.
+                    draggedView.animate().cancel()
+                    draggedView.translationX = 0f
+                    draggedView.translationY = 0f
+
+                    activeServeDragView = draggedView
+                    isHandlingServeDrag = true
+                    // The ball follows the finger straight away – this is a drag, not a long-press.
+                    isDraggingServeBall = true
                     serveDragStartRawX = event.rawX
                     serveDragStartRawY = event.rawY
-                    view.elevation = 24f
+                    draggedView.elevation = draggingElevation
+                    overlay.parent?.requestDisallowInterceptTouchEvent(true)
+                    overlay.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    draggedView.animate()
+                        .scaleX(1.35f)
+                        .scaleY(1.35f)
+                        .alpha(0.92f)
+                        .setDuration(90)
+                        .start()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    view.translationX = event.rawX - serveDragStartRawX
-                    view.translationY = event.rawY - serveDragStartRawY
+                    val draggedView = activeServeDragView ?: return@OnTouchListener false
+                    draggedView.translationX = event.rawX - serveDragStartRawX
+                    draggedView.translationY = event.rawY - serveDragStartRawY
                     true
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (event.action == MotionEvent.ACTION_UP) {
-                        val ballCenterX = view.left + view.width / 2f + view.translationX
-                        val dividerCenterX = binding.divider.x + binding.divider.width / 2f
-                        val crossedOver = if (view.id == R.id.ivServe1)
-                            ballCenterX > dividerCenterX
-                        else
-                            ballCenterX < dividerCenterX
-                        if (crossedOver) viewModel.swapServer()
-                        view.performClick()
+                MotionEvent.ACTION_UP -> {
+                    val draggedView = activeServeDragView ?: return@OnTouchListener false
+                    val swap = crossedToOtherSide(draggedView, event.rawX)
+                    if (swap) {
+                        overlay.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        // Reset instantly so the indicator can appear on the new side cleanly.
+                        releaseServeDrag(draggedView, animateBack = false)
+                        viewModel.swapServer()
+                    } else {
+                        draggedView.performClick()
+                        releaseServeDrag(draggedView, animateBack = true)
                     }
-                    view.animate().translationX(0f).translationY(0f).setDuration(150).start()
-                    view.elevation = 0f
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    val draggedView = activeServeDragView ?: return@OnTouchListener false
+                    releaseServeDrag(draggedView, animateBack = true)
                     true
                 }
                 else -> false
             }
         }
-        binding.ivServe1.setOnTouchListener(dragListener)
-        binding.ivServe2.setOnTouchListener(dragListener)
+        binding.serveDragTouchOverlay.setOnTouchListener(dragListener)
+    }
+
+    private fun findServeIndicatorUnderTouch(rawX: Float, rawY: Float): View? {
+        val hitRect = Rect()
+        fun hits(view: View): Boolean {
+            if (view.visibility != View.VISIBLE) return false
+            if (!view.getGlobalVisibleRect(hitRect)) return false
+            val density = resources.displayMetrics.density
+            val extraHitSlop = (16f * density).roundToInt()
+            hitRect.inset(-extraHitSlop, -extraHitSlop)
+            return hitRect.contains(rawX.roundToInt(), rawY.roundToInt())
+        }
+
+        return when {
+            hits(binding.ivServe1) -> binding.ivServe1
+            hits(binding.ivServe2) -> binding.ivServe2
+            else -> null
+        }
     }
 
     private fun observeState() {
@@ -236,7 +321,7 @@ class MainActivity : AppCompatActivity() {
                         ) {
                             val d = drawable
                             canvas.save()
-                            val transY = bottom - d.bounds.bottom - verticalOffsetPx
+                            val transY = maxOf(top.toFloat(), (bottom - d.bounds.bottom - verticalOffsetPx).toFloat())
                             val transX = if (placeAtEnd) x + trailingHorizontalOffsetPx else x
                             canvas.translate(transX, transY.toFloat())
                             d.draw(canvas)
@@ -249,7 +334,7 @@ class MainActivity : AppCompatActivity() {
             val rightName = formatDisplayName(if (p1OnLeft) state.player2Name else state.player1Name)
             binding.tvPlayer1Name.text = withServeBall(leftName, isDoubles && leftServing)
             binding.tvPlayer2Name.text = withServeBall(rightName, isDoubles && !leftServing, placeAtEnd = true)
-            val playerNameTextSizeSp = if (isDoubles) 16f else 22f
+            val playerNameTextSizeSp = if (isDoubles) 14f else 18f
             binding.tvPlayer1Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
             binding.tvPlayer2Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
             binding.tvPlayer1Name.maxLines = if (isDoubles) 2 else 1
@@ -258,7 +343,9 @@ class MainActivity : AppCompatActivity() {
             binding.tvScore2.text = (if (p1OnLeft) state.score2 else state.score1).toString()
             val leftSets = if (p1OnLeft) state.sets1 else state.sets2
             val rightSets = if (p1OnLeft) state.sets2 else state.sets1
-            binding.tvSets.text = getString(R.string.score_sets_format, leftSets, rightSets)
+            binding.tvSet1.text = leftSets.toString()
+            binding.tvSet2.text = rightSets.toString()
+            binding.rootLayout.post { alignCurrentScoreGlyphsToSetGlyphs() }
             updateMatchTimerText()
             updateMatchSummaryPanel(state)
 
@@ -354,6 +441,23 @@ class MainActivity : AppCompatActivity() {
         stopRallyBallAnimation()
         stopMatchTimerTicker()
         super.onDestroy()
+    }
+
+    private fun alignCurrentScoreGlyphsToSetGlyphs() {
+        alignGlyphTop(binding.tvScore1, binding.tvSet1)
+        alignGlyphTop(binding.tvScore2, binding.tvSet2)
+    }
+
+    private fun alignGlyphTop(scoreView: TextView, targetView: TextView) {
+        val scoreBaseline = scoreView.baseline
+        val targetBaseline = targetView.baseline
+        if (scoreBaseline < 0 || targetBaseline < 0) return
+
+        val scoreGlyphTop = scoreView.top + scoreBaseline + scoreView.paint.fontMetrics.ascent
+        val targetGlyphTop = targetView.top + targetBaseline + targetView.paint.fontMetrics.ascent
+        val density = resources.displayMetrics.density
+        val visualCalibrationPx = -12f * density
+        scoreView.translationY = (targetGlyphTop - scoreGlyphTop) + visualCalibrationPx
     }
 
     private fun startMatchTimerTickerIfNeeded() {
@@ -566,15 +670,12 @@ class MainActivity : AppCompatActivity() {
             val leftX = leftCenterX - (ballWidth / 2f)
             val rightX = rightCenterX - (ballWidth / 2f)
 
-            val baseCenterY = (
-                (leftScore.y + (leftScore.height * 0.58f)) +
-                    (rightScore.y + (rightScore.height * 0.58f))
-                ) / 2f
+            val density = resources.displayMetrics.density
+            val desiredArc = abs(rightX - leftX) * 0.10f
+            val arcHeight = maxOf(18f * density, minOf(52f * density, desiredArc))
+            // Keep the arc apex around the screen middle to avoid drifting too high.
+            val baseCenterY = (binding.rootLayout.height * 0.50f) + arcHeight
             val baseY = baseCenterY - (ballHeight / 2f)
-            val netTopY = net.y + (net.height * 0.20f)
-            val desiredArc = abs(rightX - leftX) * 0.20f
-            val minArcToClearNet = (baseY - netTopY) + ballHeight
-            val arcHeight = maxOf(70f, minOf(220f, maxOf(desiredArc, minArcToClearNet)))
 
             binding.glRallyBall.renderer.apply {
                 this.leftX = leftX
