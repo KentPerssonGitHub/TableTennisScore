@@ -63,6 +63,9 @@ private const val SERVE_BOUNCE_HEIGHT_RATIO = 0.20f
 private const val MATCH_PEAK_AMPLITUDE_AT_EDGES = 1f
 private const val MATCH_PEAK_AMPLITUDE_AT_CENTER = 0.82f
 private const val MATCH_EDGE_DOWN_OFFSET_RATIO = 0f
+// After the initial serve leg, every rally leg lands a single bounce deep on the far side
+// (no bounce right after leaving the hitter's own side).
+private const val MATCH_RALLY_BOUNCE_POSITION_RATIO = 0.68f
 private const val BAT_IDLE_SWING_ANGLE = 52f
 private const val BAT_SWING_ANGLE = 34f
 private const val BAT_SWING_WINDOW = 0.085f
@@ -829,6 +832,8 @@ class MainActivity : AppCompatActivity() {
                 this.peakAmplitudeAtEdges = MATCH_PEAK_AMPLITUDE_AT_EDGES
                 this.peakAmplitudeAtCenter = MATCH_PEAK_AMPLITUDE_AT_CENTER
                 this.edgeDownOffsetRatio = MATCH_EDGE_DOWN_OFFSET_RATIO
+                this.enableServeThenRallyBounce = true
+                this.rallyBouncePositionRatio = MATCH_RALLY_BOUNCE_POSITION_RATIO
                 this.isAnimating = true
             }
 

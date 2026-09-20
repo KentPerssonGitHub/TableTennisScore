@@ -14,11 +14,13 @@ import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 
 private const val DEFAULT_PEAK_AMPLITUDE_AT_EDGES = 0.45f
 private const val DEFAULT_PEAK_AMPLITUDE_AT_CENTER = 1f
 private const val DEFAULT_EDGE_DOWN_OFFSET_RATIO = 0.10f
+private const val DEFAULT_RALLY_BOUNCE_POSITION_RATIO = 0.68f
 
 class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
@@ -87,6 +89,16 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
     var peakAmplitudeAtCenter = DEFAULT_PEAK_AMPLITUDE_AT_CENTER
     /** Extra downward push applied only near t=0/1, as a ratio of arcHeight. */
     var edgeDownOffsetRatio = DEFAULT_EDGE_DOWN_OFFSET_RATIO
+    /**
+     * When true: only the very first leg after a phase reset uses the double-bounce serve
+     * profile above; every leg after that uses a single deep bounce near the far end of the
+     * leg with no bounce right after leaving the hitter's side (real rally behavior), looping
+     * indefinitely while alternating direction each leg. When false (default), every leg keeps
+     * reusing the same double-bounce serve profile, preserving the original repeating look.
+     */
+    var enableServeThenRallyBounce = false
+    /** Fraction of a rally leg (0..1) where the single bounce lands, deep on the far side. */
+    var rallyBouncePositionRatio = DEFAULT_RALLY_BOUNCE_POSITION_RATIO
 
     private var startTime = 0L
     private val duration = 1800L
@@ -150,22 +162,64 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (!isAnimating) return
 
         if (startTime == 0L) startTime = SystemClock.uptimeMillis()
-        val elapsed = (SystemClock.uptimeMillis() - startTime) % (duration * 2)
-        
-        val tRaw = elapsed.toFloat() / duration
-        val t = if (tRaw > 1f) 2f - tRaw else tRaw
-        
-        val currentX = leftX + (rightX - leftX) * t
-        // Serve path: peak -> bounce -> peak -> bounce -> peak, with the two edge peaks
-        // (near the table ends) and the center peak (over the net) independently tunable.
-        val bounceWave = abs(sin((2f * PI.toFloat() * t) - (PI.toFloat() / 2f)))
-        val edgeFactor = abs((2f * t) - 1f) // 1 at t=0/1 (edges), 0 at t=0.5 (center)
-        val amplitude = peakAmplitudeAtCenter + (peakAmplitudeAtEdges - peakAmplitudeAtCenter) * edgeFactor
-        val edgeDownOffset = arcHeight * edgeDownOffsetRatio * edgeFactor
-        val currentY = baseY - (arcHeight * bounceWave * amplitude) + edgeDownOffset
 
-        val spinDirection = if (tRaw > 1f) -1f else 1f
-        val rotation = (elapsed.toFloat() / duration) * 360f * 3f * spinDirection
+        val currentX: Float
+        val currentY: Float
+        val rotation: Float
+
+        if (!enableServeThenRallyBounce) {
+            // Legacy behavior (used by the splash screen): every leg repeats the exact same
+            // double-bounce serve profile, unchanged from the original implementation.
+            val elapsed = (SystemClock.uptimeMillis() - startTime) % (duration * 2)
+
+            val tRaw = elapsed.toFloat() / duration
+            val t = if (tRaw > 1f) 2f - tRaw else tRaw
+
+            currentX = leftX + (rightX - leftX) * t
+            val bounceWave = abs(sin((2f * PI.toFloat() * t) - (PI.toFloat() / 2f)))
+            val edgeFactor = abs((2f * t) - 1f)
+            val amplitude = peakAmplitudeAtCenter + (peakAmplitudeAtEdges - peakAmplitudeAtCenter) * edgeFactor
+            val edgeDownOffset = arcHeight * edgeDownOffsetRatio * edgeFactor
+            currentY = baseY - (arcHeight * bounceWave * amplitude) + edgeDownOffset
+
+            val spinDirection = if (tRaw > 1f) -1f else 1f
+            rotation = (elapsed.toFloat() / duration) * 360f * 3f * spinDirection
+        } else {
+            // Match behavior: leg 0 (the initial serve, server -> receiver) keeps the exact
+            // double-bounce profile above. Every leg after that is a real rally hit: no bounce
+            // right after leaving the hitter's side, a smooth arc over the net, then a single
+            // bounce deep on the far side before rising again to the other player, looping
+            // indefinitely while alternating direction each leg.
+            val totalElapsed = SystemClock.uptimeMillis() - startTime
+            val legIndex = totalElapsed / duration
+            val pLocal = (totalElapsed % duration).toFloat() / duration.toFloat()
+            val forwardLeg = (legIndex % 2L) == 0L
+
+            currentX = if (forwardLeg) {
+                leftX + (rightX - leftX) * pLocal
+            } else {
+                rightX + (leftX - rightX) * pLocal
+            }
+
+            currentY = if (legIndex == 0L) {
+                val bounceWave = abs(sin((2f * PI.toFloat() * pLocal) - (PI.toFloat() / 2f)))
+                val edgeFactor = abs((2f * pLocal) - 1f)
+                val amplitude = peakAmplitudeAtCenter + (peakAmplitudeAtEdges - peakAmplitudeAtCenter) * edgeFactor
+                val edgeDownOffset = arcHeight * edgeDownOffsetRatio * edgeFactor
+                baseY - (arcHeight * bounceWave * amplitude) + edgeDownOffset
+            } else {
+                val bouncePos = rallyBouncePositionRatio.coerceIn(0.05f, 0.95f)
+                val heightFactor = if (pLocal <= bouncePos) {
+                    cos((pLocal / bouncePos) * (PI.toFloat() / 2f))
+                } else {
+                    sin(((pLocal - bouncePos) / (1f - bouncePos)) * (PI.toFloat() / 2f))
+                }
+                baseY - (arcHeight * peakAmplitudeAtEdges * heightFactor)
+            }
+
+            val spinDirection = if (forwardLeg) 1f else -1f
+            rotation = pLocal * 360f * 3f * spinDirection
+        }
 
         GLES20.glUseProgram(program)
 
