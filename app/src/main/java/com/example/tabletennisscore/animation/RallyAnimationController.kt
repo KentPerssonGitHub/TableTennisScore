@@ -1,4 +1,5 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.animation
+import com.example.tabletennisscore.GameViewModel
 
 import android.animation.ValueAnimator
 import android.view.View

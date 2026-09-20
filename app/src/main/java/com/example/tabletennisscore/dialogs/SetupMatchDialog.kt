@@ -1,4 +1,7 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.dialogs
+import com.example.tabletennisscore.normalizeTitleCaseWords
+import com.example.tabletennisscore.GameViewModel
+import com.example.tabletennisscore.R
 
 import android.content.res.ColorStateList
 import android.graphics.Color

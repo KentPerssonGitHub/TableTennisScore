@@ -1,4 +1,4 @@
-﻿package com.example.tabletennisscore
+package com.example.tabletennisscore.animation
 import android.content.Context
 import android.graphics.PixelFormat
 import android.opengl.GLSurfaceView

@@ -28,13 +28,13 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity
-            android:name=".HistoryActivity"
+            android:name=".history.HistoryActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity
-            android:name=".PointDetailsActivity"
+            android:name=".history.PointDetailsActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />

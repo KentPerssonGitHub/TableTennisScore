@@ -1,4 +1,7 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.history
+import com.example.tabletennisscore.formatClockDuration
+import com.example.tabletennisscore.GameViewModel
+import com.example.tabletennisscore.R
 
 import android.graphics.Typeface
 import android.text.TextUtils

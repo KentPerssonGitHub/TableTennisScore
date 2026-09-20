@@ -1,4 +1,9 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.history
+import com.example.tabletennisscore.nextServer
+import com.example.tabletennisscore.otherPlayer
+import com.example.tabletennisscore.hideSystemBarsImmersive
+import com.example.tabletennisscore.GameViewModel
+import com.example.tabletennisscore.R
 
 import android.os.Bundle
 import android.text.Spannable

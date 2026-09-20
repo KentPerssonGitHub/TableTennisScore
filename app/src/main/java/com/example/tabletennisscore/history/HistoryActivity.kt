@@ -1,4 +1,8 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.history
+import com.example.tabletennisscore.normalizeTitleCaseWords
+import com.example.tabletennisscore.hideSystemBarsImmersive
+import com.example.tabletennisscore.GameViewModel
+import com.example.tabletennisscore.R
 
 import android.content.Intent
 import android.net.Uri

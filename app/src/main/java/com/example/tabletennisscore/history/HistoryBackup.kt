@@ -1,4 +1,5 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.history
+import com.example.tabletennisscore.GameViewModel
 
 import com.example.tabletennisscore.data.MatchResult
 import com.google.gson.Gson

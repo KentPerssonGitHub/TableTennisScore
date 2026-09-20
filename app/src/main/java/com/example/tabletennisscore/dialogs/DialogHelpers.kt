@@ -1,4 +1,5 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.dialogs
+import com.example.tabletennisscore.R
 
 import android.text.InputFilter
 import android.text.Spanned

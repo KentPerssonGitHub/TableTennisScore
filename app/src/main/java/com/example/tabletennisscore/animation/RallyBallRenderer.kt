@@ -1,4 +1,5 @@
-package com.example.tabletennisscore
+package com.example.tabletennisscore.animation
+import com.example.tabletennisscore.R
 
 import android.content.Context
 import android.graphics.BitmapFactory

@@ -1,4 +1,6 @@
 package com.example.tabletennisscore
+import com.example.tabletennisscore.GameViewModel
+import com.example.tabletennisscore.R
 
 import android.graphics.Typeface
 import android.view.Gravity

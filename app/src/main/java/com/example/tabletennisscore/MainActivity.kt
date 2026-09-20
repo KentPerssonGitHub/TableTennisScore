@@ -1,4 +1,11 @@
 package com.example.tabletennisscore
+import com.example.tabletennisscore.history.HistoryActivity
+import com.example.tabletennisscore.dialogs.styleDialogButtons
+import com.example.tabletennisscore.dialogs.showEditTournamentNameDialog
+import com.example.tabletennisscore.dialogs.showEditNameDialog
+import com.example.tabletennisscore.dialogs.showEditScoreDialog
+import com.example.tabletennisscore.dialogs.confirmSetupMatch
+import com.example.tabletennisscore.animation.RallyAnimationController
 
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
