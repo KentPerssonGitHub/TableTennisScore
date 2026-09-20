@@ -23,6 +23,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.tabletennisscore.data.MatchResult
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 
@@ -32,176 +33,11 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
     nameGroup: List<String>,
     onSave: (MatchResult) -> Unit,
 ) {
-    val layout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        val padding = (20 * resources.displayMetrics.density).toInt()
-        setPadding(padding, padding, padding, 0)
-    }
-    val p1Edit = AutoCompleteTextView(this).apply {
-        hint = getString(R.string.history_edit_player1)
-        setText(result.player1Name)
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
-        imeOptions = EditorInfo.IME_ACTION_NEXT
-        maxLines = 1
-        threshold = 0
-    }
-    val p2Edit = AutoCompleteTextView(this).apply {
-        hint = getString(R.string.history_edit_player2)
-        setText(result.player2Name)
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
-        imeOptions = EditorInfo.IME_ACTION_DONE
-        maxLines = 1
-        threshold = 0
-    }
-    if (nameGroup.isNotEmpty()) {
-        val namesAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, nameGroup)
-        p1Edit.setAdapter(namesAdapter)
-        p2Edit.setAdapter(namesAdapter)
-        p1Edit.setOnClickListener { p1Edit.showDropDown() }
-        p2Edit.setOnClickListener { p2Edit.showDropDown() }
-    }
-
-    val selectFromGroupP1 = outlinedButton(getString(R.string.dialog_select_from_group)).apply {
-        isEnabled = nameGroup.isNotEmpty()
-        alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
-        setOnClickListener {
-            showPlayerNamePickerDialog(nameGroup, p1Edit.text.toString()) { selected ->
-                p1Edit.setText(selected)
-                p1Edit.setSelection(p1Edit.text.length)
-            }
-        }
-    }
-    val selectFromGroupP2 = outlinedButton(getString(R.string.dialog_select_from_group), bottomMarginDp = 8).apply {
-        isEnabled = nameGroup.isNotEmpty()
-        alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
-        setOnClickListener {
-            showPlayerNamePickerDialog(nameGroup, p2Edit.text.toString()) { selected ->
-                p2Edit.setText(selected)
-                p2Edit.setSelection(p2Edit.text.length)
-            }
-        }
-    }
-    
-    val roundLabel = TextView(this).apply {
-        text = getString(R.string.history_round_label)
-        setPadding(0, 16, 0, 8)
-    }
-    val rounds = listOf(
-        getString(R.string.round_pool),
-        getString(R.string.round_group),
-        getString(R.string.round_32),
-        getString(R.string.round_16),
-        getString(R.string.round_8),
-        getString(R.string.round_semi),
-        getString(R.string.round_final)
-    )
-    
-    fun px(value: Int): Int = dp(value)
-
-    val roundGroup = ChipGroup(this).apply {
-        isSingleSelection = true
-        isSelectionRequired = true
-        chipSpacingHorizontal = px(8)
-        chipSpacingVertical = px(8)
-        setPadding(0, 6, 0, 6)
-    }
-
-    var selectedRound = if (result.matchRound.isNotBlank()) result.matchRound else rounds.firstOrNull().orEmpty()
-    fun refreshRoundOutline() {
-        for (i in 0 until roundGroup.childCount) {
-            val chip = roundGroup.getChildAt(i) as? Chip ?: continue
-            styleChoiceChip(chip, (chip.tag as? String) == selectedRound)
-        }
-    }
-    rounds.forEach { round ->
-        val btn = Chip(this).apply {
-            id = View.generateViewId()
-            text = round
-            tag = round
-            isCheckable = true
-            isChecked = (round == selectedRound)
-            isAllCaps = false
-            chipMinHeight = px(34).toFloat()
-        }
-        roundGroup.addView(btn)
-    }
-    refreshRoundOutline()
-    roundGroup.setOnCheckedStateChangeListener { group, checkedIds ->
-        val selectedId = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
-        selectedRound = (group.findViewById<Chip>(selectedId).tag as? String) ?: selectedRound
-        refreshRoundOutline()
-    }
-
-    val dataStatusLabel = TextView(this).apply {
-        text = getString(R.string.history_data_status_label)
-        setPadding(0, 8, 0, 8)
-    }
-    val dataStatusLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-    }
-    val protectMatchCheck = CheckBox(this).apply {
-        text = getString(R.string.history_protect_match_checkbox)
-        isChecked = result.isProtected
-        setPadding(0, 12, 0, 8)
-    }
-    val dataOkRb = RadioButton(this).apply {
-        text = getString(R.string.history_data_status_ok_option)
-        isChecked = result.isDataValid
-    }
-    val dataBadRb = RadioButton(this).apply {
-        text = getString(R.string.history_data_status_bad_option)
-        isChecked = !result.isDataValid
-    }
-    dataOkRb.setOnClickListener {
-        dataOkRb.isChecked = true
-        dataBadRb.isChecked = false
-    }
-    dataBadRb.setOnClickListener {
-        dataOkRb.isChecked = false
-        dataBadRb.isChecked = true
-    }
-    dataStatusLayout.addView(dataOkRb)
-    dataStatusLayout.addView(dataBadRb)
-
-    layout.addView(p1Edit)
-    layout.addView(selectFromGroupP1)
-    layout.addView(p2Edit)
-    layout.addView(selectFromGroupP2)
-    layout.addView(roundLabel)
-    layout.addView(roundGroup)
-    layout.addView(protectMatchCheck)
-    layout.addView(dataStatusLabel)
-    layout.addView(dataStatusLayout)
-
-    val scrollContent = ScrollView(this).apply {
-        addView(layout)
-    }
-
-    fun saveChanges(): Boolean {
-        val p1 = p1Edit.text.toString().trim()
-        val p2 = p2Edit.text.toString().trim()
-        val isDataValid = dataOkRb.isChecked
-        if (p1.isEmpty() || p2.isEmpty()) {
-            Toast.makeText(this, R.string.history_edit_names_required, Toast.LENGTH_SHORT).show()
-            return false
-        }
-        onSave(
-            result.copy(
-                player1Name = p1,
-                player2Name = p2,
-                matchRound = selectedRound,
-                isDataValid = isDataValid,
-                isProtected = protectMatchCheck.isChecked,
-            )
-        )
-        return true
-    }
+    val form = EditMatchDetailsForm(this, result, nameGroup)
 
     val dialog = AlertDialog.Builder(this)
         .setTitle(R.string.history_match_details_title)
-        .setView(scrollContent)
+        .setView(ScrollView(this).apply { addView(form.buildContent()) })
         .setPositiveButton(R.string.dialog_ok, null)
         .setNegativeButton(R.string.dialog_cancel, null)
         .create()
@@ -211,18 +47,194 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
         okButton.setTextColor(ContextCompat.getColor(this, R.color.score_text))
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
             .setTextColor(ContextCompat.getColor(this, R.color.player_name))
+        // Keep the dialog open when the names are invalid, so use a custom click listener.
         okButton.setOnClickListener {
-            if (saveChanges()) dialog.dismiss()
+            val edited = form.editedResult() ?: return@setOnClickListener
+            onSave(edited)
+            dialog.dismiss()
         }
-        p2Edit.setOnEditorActionListener { _, actionId, event ->
+        form.setOnDone { okButton.performClick() }
+    }
+    dialog.show()
+}
+
+/** The fields of the match-details dialog: player names, round, protection and data status. */
+private class EditMatchDetailsForm(
+    private val activity: AppCompatActivity,
+    private val result: MatchResult,
+    private val nameGroup: List<String>,
+) {
+    private val hasNameGroup = nameGroup.isNotEmpty()
+    private var selectedRound = result.matchRound.ifBlank { activity.getString(R.string.round_pool) }
+
+    private lateinit var player1Edit: AutoCompleteTextView
+    private lateinit var player2Edit: AutoCompleteTextView
+    private lateinit var protectMatchCheck: CheckBox
+    private lateinit var dataOkOption: RadioButton
+
+    private fun dp(value: Int) = activity.dp(value)
+
+    fun buildContent(): View {
+        player1Edit = nameEdit(R.string.history_edit_player1, result.player1Name, EditorInfo.IME_ACTION_NEXT)
+        player2Edit = nameEdit(R.string.history_edit_player2, result.player2Name, EditorInfo.IME_ACTION_DONE)
+        if (hasNameGroup) {
+            val namesAdapter = ArrayAdapter(activity, android.R.layout.simple_dropdown_item_1line, nameGroup)
+            listOf(player1Edit, player2Edit).forEach { edit ->
+                edit.setAdapter(namesAdapter)
+                edit.setOnClickListener { edit.showDropDown() }
+            }
+        }
+
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), 0)
+            addView(player1Edit)
+            addView(selectFromGroupButton(player1Edit, bottomMarginDp = 0))
+            addView(player2Edit)
+            addView(selectFromGroupButton(player2Edit, bottomMarginDp = 8))
+            addView(sectionLabel(R.string.history_round_label, topPadding = 16))
+            addView(roundChips())
+            protectMatchCheck = protectCheckBox()
+            addView(protectMatchCheck)
+            addView(sectionLabel(R.string.history_data_status_label, topPadding = 8))
+            addView(dataStatusOptions())
+        }
+    }
+
+    /** The edited match, or null (after telling the user) when a player name is missing. */
+    fun editedResult(): MatchResult? {
+        val player1 = player1Edit.text.toString().trim()
+        val player2 = player2Edit.text.toString().trim()
+        if (player1.isEmpty() || player2.isEmpty()) {
+            Toast.makeText(activity, R.string.history_edit_names_required, Toast.LENGTH_SHORT).show()
+            return null
+        }
+        return result.copy(
+            player1Name = player1,
+            player2Name = player2,
+            matchRound = selectedRound,
+            isDataValid = dataOkOption.isChecked,
+            isProtected = protectMatchCheck.isChecked,
+        )
+    }
+
+    /** Runs [action] when the user presses Done / Enter in the last name field. */
+    fun setOnDone(action: () -> Unit) {
+        player2Edit.setOnEditorActionListener { _, actionId, event ->
             val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
             if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
-                okButton.performClick()
+                action()
                 true
             } else {
                 false
             }
         }
     }
-    dialog.show()
+
+    // ----- Building blocks -----
+
+    private fun nameEdit(hintRes: Int, initial: String, imeAction: Int) = AutoCompleteTextView(activity).apply {
+        hint = activity.getString(hintRes)
+        setText(initial)
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH))
+        imeOptions = imeAction
+        maxLines = 1
+        threshold = 0
+    }
+
+    private fun selectFromGroupButton(target: AutoCompleteTextView, bottomMarginDp: Int): MaterialButton =
+        activity.outlinedButton(activity.getString(R.string.dialog_select_from_group), bottomMarginDp = bottomMarginDp).apply {
+            isEnabled = hasNameGroup
+            alpha = if (hasNameGroup) 1f else 0.45f
+            setOnClickListener {
+                activity.showPlayerNamePickerDialog(nameGroup, target.text.toString()) { selected ->
+                    target.setText(selected)
+                    target.setSelection(target.text.length)
+                }
+            }
+        }
+
+    private fun sectionLabel(textRes: Int, topPadding: Int) = TextView(activity).apply {
+        text = activity.getString(textRes)
+        setPadding(0, topPadding, 0, 8)
+    }
+
+    private fun roundChips(): ChipGroup {
+        val rounds = listOf(
+            R.string.round_pool,
+            R.string.round_group,
+            R.string.round_32,
+            R.string.round_16,
+            R.string.round_8,
+            R.string.round_semi,
+            R.string.round_final,
+        ).map { activity.getString(it) }
+
+        val group = ChipGroup(activity).apply {
+            isSingleSelection = true
+            isSelectionRequired = true
+            chipSpacingHorizontal = dp(8)
+            chipSpacingVertical = dp(8)
+            setPadding(0, 6, 0, 6)
+        }
+        fun refreshOutlines() {
+            for (i in 0 until group.childCount) {
+                val chip = group.getChildAt(i) as? Chip ?: continue
+                activity.styleChoiceChip(chip, (chip.tag as? String) == selectedRound)
+            }
+        }
+        rounds.forEach { round ->
+            group.addView(
+                Chip(activity).apply {
+                    id = View.generateViewId()
+                    text = round
+                    tag = round
+                    isCheckable = true
+                    isChecked = round == selectedRound
+                    isAllCaps = false
+                    chipMinHeight = dp(34).toFloat()
+                },
+            )
+        }
+        refreshOutlines()
+        group.setOnCheckedStateChangeListener { _, checkedIds ->
+            val chip = checkedIds.firstOrNull()?.let { group.findViewById<Chip>(it) }
+                ?: return@setOnCheckedStateChangeListener
+            selectedRound = (chip.tag as? String) ?: selectedRound
+            refreshOutlines()
+        }
+        return group
+    }
+
+    private fun protectCheckBox() = CheckBox(activity).apply {
+        text = activity.getString(R.string.history_protect_match_checkbox)
+        isChecked = result.isProtected
+        setPadding(0, 12, 0, 8)
+    }
+
+    /** Two radio buttons (data OK / data bad) that behave as a group without a RadioGroup. */
+    private fun dataStatusOptions(): LinearLayout {
+        dataOkOption = RadioButton(activity).apply {
+            text = activity.getString(R.string.history_data_status_ok_option)
+            isChecked = result.isDataValid
+        }
+        val dataBadOption = RadioButton(activity).apply {
+            text = activity.getString(R.string.history_data_status_bad_option)
+            isChecked = !result.isDataValid
+        }
+        dataOkOption.setOnClickListener {
+            dataOkOption.isChecked = true
+            dataBadOption.isChecked = false
+        }
+        dataBadOption.setOnClickListener {
+            dataOkOption.isChecked = false
+            dataBadOption.isChecked = true
+        }
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(dataOkOption)
+            addView(dataBadOption)
+        }
+    }
 }
