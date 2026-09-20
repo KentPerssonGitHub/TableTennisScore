@@ -88,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private var decidingSwapSnackbar: Snackbar? = null
     private var previousIsMatchRunning = false
     private var rallyStartsFromLeft = true
+    private var lastRallyScoreKey: List<Int>? = null
     private var rallyBatAnimator: ValueAnimator? = null
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerTick = object : Runnable {
@@ -813,7 +814,12 @@ class MainActivity : AppCompatActivity() {
             val bounceLineY = tableTop + (tableHeight * 0.50f)
             val baseY = bounceLineY - (ballHeight / 2f)
             val arcHeight = tableHeight * SERVE_BOUNCE_HEIGHT_RATIO
-            val shouldRestartCycle = !binding.glRallyBall.renderer.isAnimating || rallyStartsFromLeft != serverOnLeft
+            // A point (or undo) changes the score, so the serve animation restarts every time.
+            val scoreKey = listOf(latestState.score1, latestState.score2, latestState.sets1, latestState.sets2)
+            val scoreChanged = lastRallyScoreKey != scoreKey
+            lastRallyScoreKey = scoreKey
+            val shouldRestartCycle = !binding.glRallyBall.renderer.isAnimating ||
+                rallyStartsFromLeft != serverOnLeft || scoreChanged
             rallyStartsFromLeft = serverOnLeft
 
             // Bats stay at the fixed left/right table ends and meet the ball at its edge-peak
@@ -846,6 +852,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopRallyBallAnimation() {
+        lastRallyScoreKey = null
         binding.glRallyBall.renderer.apply {
             isAnimating = false
             resetAnimationPhase()
