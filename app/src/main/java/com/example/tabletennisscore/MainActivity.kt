@@ -70,6 +70,8 @@ private const val BAT_IDLE_SWING_ANGLE = 52f
 private const val BAT_SWING_ANGLE = 34f
 private const val BAT_SWING_WINDOW = 0.085f
 private const val BAT_HEAD_CENTER_Y_RATIO = 35f / 112f
+// Pivot near the middle of the handle/shaft (instead of its very end) for a more natural swing.
+private const val BAT_PIVOT_Y_RATIO = 0.66f
 
 class MainActivity : AppCompatActivity() {
 
@@ -884,7 +886,7 @@ class MainActivity : AppCompatActivity() {
         strikeRotationDegrees: Float,
     ) {
         val pivotX = batView.width * 0.5f
-        val pivotY = batView.height * 0.88f
+        val pivotY = batView.height * BAT_PIVOT_Y_RATIO
         val headCenterX = batView.width * 0.5f
         val headCenterY = batView.height * BAT_HEAD_CENTER_Y_RATIO
         val dx = headCenterX - pivotX
