@@ -18,6 +18,12 @@ class SplashActivity : AppCompatActivity() {
 
     companion object {
         private const val FLASH_COLOR = -0x2f2f30
+        // Matches the in-game (match screen) serve-then-rally shape: tall peaks at the table
+        // edges, only slightly lower over the net, and a single deep bounce per rally leg.
+        private const val SPLASH_PEAK_AMPLITUDE_AT_EDGES = 1f
+        private const val SPLASH_PEAK_AMPLITUDE_AT_CENTER = 0.82f
+        private const val SPLASH_EDGE_DOWN_OFFSET_RATIO = 0f
+        private const val SPLASH_RALLY_BOUNCE_POSITION_RATIO = 0.68f
     }
 
     private var hasContinued = false
@@ -182,6 +188,11 @@ class SplashActivity : AppCompatActivity() {
             this.arcHeight = arcHeight
             this.ballWidth = ballSize
             this.ballHeight = ballSize
+            this.peakAmplitudeAtEdges = SPLASH_PEAK_AMPLITUDE_AT_EDGES
+            this.peakAmplitudeAtCenter = SPLASH_PEAK_AMPLITUDE_AT_CENTER
+            this.edgeDownOffsetRatio = SPLASH_EDGE_DOWN_OFFSET_RATIO
+            this.enableServeThenRallyBounce = true
+            this.rallyBouncePositionRatio = SPLASH_RALLY_BOUNCE_POSITION_RATIO
             this.isAnimating = true
         }
     }
