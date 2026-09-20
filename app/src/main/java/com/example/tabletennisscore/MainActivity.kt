@@ -10,14 +10,9 @@ import com.example.tabletennisscore.animation.RallyAnimationController
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Intent
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Handler
-import android.text.SpannableStringBuilder
-import android.text.Spanned
-import android.text.style.ImageSpan
 import android.os.Bundle
 import android.os.Looper
 import android.util.TypedValue
@@ -341,156 +336,134 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.state.observe(this) { state ->
-            val p1OnLeft = !state.sidesSwapped
-            val isDoubles = state.matchMode == GameViewModel.MATCH_MODE_DOUBLES
-            val leftServing = (p1OnLeft && state.server == 1) || (!p1OnLeft && state.server == 2)
-            fun formatDisplayName(name: String): String {
-                return if (isDoubles) name.replace(" / ", "\n") else name
-            }
-            fun withServeBall(name: String, showBall: Boolean, placeAtEnd: Boolean = false): CharSequence {
-                if (!showBall) return name
-                val density = resources.displayMetrics.density
-                val iconSize = (14 * density).toInt()
-                val verticalOffsetPx = (4 * density).toInt()
-                val trailingHorizontalOffsetPx = (12 * density).toInt()
-                val gap = "   "
-                val ball = ContextCompat.getDrawable(this@MainActivity, R.drawable.stigaperform40size128)
-                if (ball == null) return if (placeAtEnd) "$name  o" else "o  $name"
-                ball.setBounds(0, 0, iconSize, iconSize)
-                val firstLineEnd = name.indexOf('\n').let { if (it >= 0) it else name.length }
-                val text = if (placeAtEnd) {
-                    // Keep right-side icon on the first line so both sides sit at the same height.
-                    name.substring(0, firstLineEnd) + gap + name.substring(firstLineEnd)
-                } else {
-                    "$gap$name"
-                }
-                val spanStart = if (placeAtEnd) firstLineEnd else 0
-                return SpannableStringBuilder(text).apply {
-                    setSpan(object : ImageSpan(ball, ImageSpan.ALIGN_BOTTOM) {
-                        override fun draw(
-                            canvas: Canvas,
-                            text: CharSequence,
-                            start: Int,
-                            end: Int,
-                            x: Float,
-                            top: Int,
-                            y: Int,
-                            bottom: Int,
-                            paint: Paint,
-                        ) {
-                            val d = drawable
-                            canvas.save()
-                            val transY = maxOf(top.toFloat(), (bottom - d.bounds.bottom - verticalOffsetPx).toFloat())
-                            val transX = if (placeAtEnd) x + trailingHorizontalOffsetPx else x
-                            canvas.translate(transX, transY.toFloat())
-                            d.draw(canvas)
-                            canvas.restore()
-                        }
-                    }, spanStart, spanStart + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                }
-            }
-            val leftName = formatDisplayName(if (p1OnLeft) state.player1Name else state.player2Name)
-            val rightName = formatDisplayName(if (p1OnLeft) state.player2Name else state.player1Name)
-            binding.tvPlayer1Name.text = withServeBall(leftName, isDoubles && leftServing)
-            binding.tvPlayer2Name.text = withServeBall(rightName, isDoubles && !leftServing, placeAtEnd = true)
-            val playerNameTextSizeSp = if (isDoubles) 14f else 18f
-            binding.tvPlayer1Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
-            binding.tvPlayer2Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
-            binding.tvPlayer1Name.maxLines = if (isDoubles) 2 else 1
-            binding.tvPlayer2Name.maxLines = if (isDoubles) 2 else 1
-            binding.tvScore1.text = (if (p1OnLeft) state.score1 else state.score2).toString()
-            binding.tvScore2.text = (if (p1OnLeft) state.score2 else state.score1).toString()
-            val leftSets = if (p1OnLeft) state.sets1 else state.sets2
-            val rightSets = if (p1OnLeft) state.sets2 else state.sets1
-            binding.tvSet1.text = leftSets.toString()
-            binding.tvSet2.text = rightSets.toString()
+            renderPlayersAndScores(state)
             binding.rootLayout.post { alignCurrentScoreGlyphsToSetGlyphs() }
             updateMatchTimerText()
             updateMatchSummaryPanel(binding, viewModel, state)
-
-            // Tournament name
-            val tName = state.tournamentName
-            binding.tvTournamentName.text = tName.ifBlank { getString(R.string.tournament_name_default) }
-            binding.tvTournamentName.alpha = if (tName.isBlank()) 0.35f else 0.70f
-
-            if (state.decidingSetSwapNoticeVersion > lastShownDecidingSwapNoticeVersion) {
-                lastShownDecidingSwapNoticeVersion = state.decidingSetSwapNoticeVersion
-                decidingSwapSnackbar?.dismiss()
-                decidingSwapSnackbar = Snackbar.make(
-                    binding.rootLayout,
-                    R.string.notice_swap_sides_now,
-                    Snackbar.LENGTH_INDEFINITE,
-                ).setAction(R.string.notice_done) {
-                    viewModel.confirmDecidingSetSideSwapDone()
-                }
-                decidingSwapSnackbar?.show()
-            }
-
-            if (!state.awaitingDecidingSetSwapConfirmation) {
-                decidingSwapSnackbar?.dismiss()
-                decidingSwapSnackbar = null
-            }
-
-            // Serve indicator follows the player, not the side
-            binding.ivServe1.visibility = if (leftServing) View.VISIBLE else View.INVISIBLE
-            binding.ivServe2.visibility = if (!leftServing) View.VISIBLE else View.INVISIBLE
-
-            val backgroundColorRes = when {
-                state.isMatchRunning -> R.color.background_running
-                state.hasMatchStarted -> R.color.background_paused
-                else -> R.color.background
-            }
-            val targetColor = ContextCompat.getColor(this, backgroundColorRes)
-
-            if (state.isMatchRunning && !previousIsMatchRunning) {
-                // Flash effect: White -> Game Green
-                ValueAnimator.ofObject(ArgbEvaluator(), Color.WHITE, targetColor).apply {
-                    duration = 500L
-                    addUpdateListener { animator ->
-                        binding.rootLayout.setBackgroundColor(animator.animatedValue as Int)
-                    }
-                    start()
-                }
-            } else {
-                binding.rootLayout.setBackgroundColor(targetColor)
-            }
-            previousIsMatchRunning = state.isMatchRunning
-
+            renderTournamentName(state)
+            handleDecidingSetSwapNotice(state)
+            renderServeIndicators(state)
+            renderBackground(state)
             binding.btnStartMatch.text = getString(
                 if (state.hasMatchStarted) R.string.btn_resume_match else R.string.btn_start_match,
             )
+            renderControls(state)
+        }
+    }
 
-            val isMatchFinished = state.matchWinner != null
-            val isAwaitingSwapConfirm = state.awaitingDecidingSetSwapConfirmation
+    private fun isLeftPlayerServing(state: GameViewModel.GameState): Boolean {
+        val p1OnLeft = !state.sidesSwapped
+        return (p1OnLeft && state.server == 1) || (!p1OnLeft && state.server == 2)
+    }
 
-            if (state.isMatchRunning) {
-                binding.btnPauseMatchText.visibility = View.VISIBLE
-                binding.btnUndoText.visibility = View.VISIBLE
+    private fun renderPlayersAndScores(state: GameViewModel.GameState) {
+        val p1OnLeft = !state.sidesSwapped
+        val isDoubles = state.matchMode == GameViewModel.MATCH_MODE_DOUBLES
+        val leftServing = isLeftPlayerServing(state)
+        fun formatDisplayName(name: String): String {
+            return if (isDoubles) name.replace(" / ", "\n") else name
+        }
+        val leftName = formatDisplayName(if (p1OnLeft) state.player1Name else state.player2Name)
+        val rightName = formatDisplayName(if (p1OnLeft) state.player2Name else state.player1Name)
+        binding.tvPlayer1Name.text = serveBallText(leftName, isDoubles && leftServing)
+        binding.tvPlayer2Name.text = serveBallText(rightName, isDoubles && !leftServing, placeAtEnd = true)
+        val playerNameTextSizeSp = if (isDoubles) 14f else 18f
+        binding.tvPlayer1Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
+        binding.tvPlayer2Name.setTextSize(TypedValue.COMPLEX_UNIT_SP, playerNameTextSizeSp)
+        binding.tvPlayer1Name.maxLines = if (isDoubles) 2 else 1
+        binding.tvPlayer2Name.maxLines = if (isDoubles) 2 else 1
+        binding.tvScore1.text = (if (p1OnLeft) state.score1 else state.score2).toString()
+        binding.tvScore2.text = (if (p1OnLeft) state.score2 else state.score1).toString()
+        binding.tvSet1.text = (if (p1OnLeft) state.sets1 else state.sets2).toString()
+        binding.tvSet2.text = (if (p1OnLeft) state.sets2 else state.sets1).toString()
+    }
 
-                binding.btnStartMatch.visibility = View.GONE
-                binding.btnSetupMatch.visibility = View.GONE
-                binding.btnHistory.visibility = View.GONE
+    private fun renderTournamentName(state: GameViewModel.GameState) {
+        val tName = state.tournamentName
+        binding.tvTournamentName.text = tName.ifBlank { getString(R.string.tournament_name_default) }
+        binding.tvTournamentName.alpha = if (tName.isBlank()) 0.35f else 0.70f
+    }
 
-                binding.centerControlsRow.visibility = View.VISIBLE
-                binding.ivSwapSides.visibility = View.GONE
-                rallyAnimation.startIfNeeded()
-                startMatchTimerTickerIfNeeded()
-            } else {
-                binding.btnPauseMatchText.visibility = View.GONE
-                binding.btnUndoText.visibility = View.GONE
-
-                // Show Start/Resume, Setup, and History when not running, unless awaiting swap
-                val showControls = !isAwaitingSwapConfirm
-                binding.btnStartMatch.visibility = if (showControls) View.VISIBLE else View.GONE
-                binding.btnSetupMatch.visibility = if (showControls) View.VISIBLE else View.GONE
-                binding.btnHistory.visibility = if (showControls) View.VISIBLE else View.GONE
-
-                binding.centerControlsRow.visibility = if (showControls) View.VISIBLE else View.GONE
-                binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
-                rallyAnimation.stop()
-                stopMatchTimerTicker()
+    private fun handleDecidingSetSwapNotice(state: GameViewModel.GameState) {
+        if (state.decidingSetSwapNoticeVersion > lastShownDecidingSwapNoticeVersion) {
+            lastShownDecidingSwapNoticeVersion = state.decidingSetSwapNoticeVersion
+            decidingSwapSnackbar?.dismiss()
+            decidingSwapSnackbar = Snackbar.make(
+                binding.rootLayout,
+                R.string.notice_swap_sides_now,
+                Snackbar.LENGTH_INDEFINITE,
+            ).setAction(R.string.notice_done) {
+                viewModel.confirmDecidingSetSideSwapDone()
             }
+            decidingSwapSnackbar?.show()
+        }
 
+        if (!state.awaitingDecidingSetSwapConfirmation) {
+            decidingSwapSnackbar?.dismiss()
+            decidingSwapSnackbar = null
+        }
+    }
+
+    /** Serve indicator follows the player, not the side. */
+    private fun renderServeIndicators(state: GameViewModel.GameState) {
+        val leftServing = isLeftPlayerServing(state)
+        binding.ivServe1.visibility = if (leftServing) View.VISIBLE else View.INVISIBLE
+        binding.ivServe2.visibility = if (!leftServing) View.VISIBLE else View.INVISIBLE
+    }
+
+    private fun renderBackground(state: GameViewModel.GameState) {
+        val backgroundColorRes = when {
+            state.isMatchRunning -> R.color.background_running
+            state.hasMatchStarted -> R.color.background_paused
+            else -> R.color.background
+        }
+        val targetColor = ContextCompat.getColor(this, backgroundColorRes)
+
+        if (state.isMatchRunning && !previousIsMatchRunning) {
+            // Flash effect: White -> Game Green
+            ValueAnimator.ofObject(ArgbEvaluator(), Color.WHITE, targetColor).apply {
+                duration = 500L
+                addUpdateListener { animator ->
+                    binding.rootLayout.setBackgroundColor(animator.animatedValue as Int)
+                }
+                start()
+            }
+        } else {
+            binding.rootLayout.setBackgroundColor(targetColor)
+        }
+        previousIsMatchRunning = state.isMatchRunning
+    }
+
+    private fun renderControls(state: GameViewModel.GameState) {
+        val isMatchFinished = state.matchWinner != null
+        val isAwaitingSwapConfirm = state.awaitingDecidingSetSwapConfirmation
+
+        if (state.isMatchRunning) {
+            binding.btnPauseMatchText.visibility = View.VISIBLE
+            binding.btnUndoText.visibility = View.VISIBLE
+
+            binding.btnStartMatch.visibility = View.GONE
+            binding.btnSetupMatch.visibility = View.GONE
+            binding.btnHistory.visibility = View.GONE
+
+            binding.centerControlsRow.visibility = View.VISIBLE
+            binding.ivSwapSides.visibility = View.GONE
+            rallyAnimation.startIfNeeded()
+            startMatchTimerTickerIfNeeded()
+        } else {
+            binding.btnPauseMatchText.visibility = View.GONE
+            binding.btnUndoText.visibility = View.GONE
+
+            // Show Start/Resume, Setup, and History when not running, unless awaiting swap
+            val showControls = !isAwaitingSwapConfirm
+            binding.btnStartMatch.visibility = if (showControls) View.VISIBLE else View.GONE
+            binding.btnSetupMatch.visibility = if (showControls) View.VISIBLE else View.GONE
+            binding.btnHistory.visibility = if (showControls) View.VISIBLE else View.GONE
+
+            binding.centerControlsRow.visibility = if (showControls) View.VISIBLE else View.GONE
+            binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+            rallyAnimation.stop()
+            stopMatchTimerTicker()
         }
     }
 
