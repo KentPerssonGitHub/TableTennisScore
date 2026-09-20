@@ -1,7 +1,7 @@
 package com.example.tabletennisscore.history
-import com.example.tabletennisscore.normalizeTitleCaseWords
+import com.example.tabletennisscore.APP_PREFS_NAME
+import com.example.tabletennisscore.PlayerNameStore
 import com.example.tabletennisscore.hideSystemBarsImmersive
-import com.example.tabletennisscore.GameViewModel
 import com.example.tabletennisscore.R
 
 import android.content.Intent
@@ -31,8 +31,8 @@ class HistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHistoryBinding
     private val dao by lazy { MatchDatabase.getInstance(this).matchResultDao() }
-    private val appPrefs by lazy { getSharedPreferences("table_tennis_prefs", MODE_PRIVATE) }
-    private val backupPrefs by lazy { getSharedPreferences("history_backup_prefs", MODE_PRIVATE) }
+    private val nameStore by lazy { PlayerNameStore(getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE)) }
+    private val backupPrefs by lazy { getSharedPreferences(BACKUP_PREFS_NAME, MODE_PRIVATE) }
     private val lastBackupDisplayFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
 
     // Tracks which tournaments are collapsed. Persists during the activity's lifecycle.
@@ -62,8 +62,9 @@ class HistoryActivity : AppCompatActivity() {
             showTournamentActionsDialog(oldName, results)
         },
         onEditMatchDetails = { result ->
-            showEditMatchDetailsDialog(result, loadPlayerNameGroup()) { updated ->
-                savePlayerNamesToGroup(updated.player1Name, updated.player2Name)
+            showEditMatchDetailsDialog(result, nameStore.load(emptyList())) { updated ->
+                nameStore.add(updated.player1Name, emptyList())
+                nameStore.add(updated.player2Name, emptyList())
                 lifecycleScope.launch { dao.update(updated) }
             }
         },
@@ -152,7 +153,7 @@ class HistoryActivity : AppCompatActivity() {
                     } ?: error("Unable to open output stream")
                 }
             }.onSuccess {
-                backupPrefs.edit().putLong("key_last_backup_ms", System.currentTimeMillis()).apply()
+                backupPrefs.edit().putLong(KEY_LAST_BACKUP_MS, System.currentTimeMillis()).apply()
                 renderLastBackupTime()
                 toast(R.string.history_export_success)
             }.onFailure {
@@ -211,7 +212,7 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun renderLastBackupTime() {
-        val ts = backupPrefs.getLong("key_last_backup_ms", 0L)
+        val ts = backupPrefs.getLong(KEY_LAST_BACKUP_MS, 0L)
         binding.tvHistoryLastBackup.text = if (ts <= 0L) {
             getString(R.string.history_last_backup_never)
         } else {
@@ -303,37 +304,13 @@ class HistoryActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun loadPlayerNameGroup(): List<String> {
-        val raw = appPrefs.getString("player_name_group_json", null) ?: return emptyList()
-        return try {
-            gson.fromJson(raw, Array<String>::class.java)
-                ?.toList()
-                .orEmpty()
-                .map { normalizePlayerNameForGroup(it) }
-                .filter { it.isNotBlank() }
-                .distinctBy { it.lowercase(Locale.ROOT) }
-                .sortedBy { it.lowercase(Locale.ROOT) }
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
-
-    private fun savePlayerNamesToGroup(vararg names: String) {
-        val merged = (loadPlayerNameGroup() + names.toList())
-            .map { normalizePlayerNameForGroup(it) }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedBy { it.lowercase(Locale.ROOT) }
-        appPrefs.edit().putString("player_name_group_json", gson.toJson(merged)).apply()
-    }
-
-    private fun normalizePlayerNameForGroup(value: String): String {
-        return normalizeTitleCaseWords(value).take(GameViewModel.MAX_PLAYER_NAME_LENGTH)
-    }
-
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBarsImmersive()
     }
 
+    private companion object {
+        const val BACKUP_PREFS_NAME = "history_backup_prefs"
+        const val KEY_LAST_BACKUP_MS = "key_last_backup_ms"
+    }
 }

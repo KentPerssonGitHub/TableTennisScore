@@ -23,6 +23,15 @@ private const val DEFAULT_PEAK_AMPLITUDE_AT_CENTER = 1f
 private const val DEFAULT_EDGE_DOWN_OFFSET_RATIO = 0.10f
 private const val DEFAULT_RALLY_BOUNCE_POSITION_RATIO = 0.68f
 
+// The serve-then-rally look used by both the match screen and the splash screen: tall near the
+// table edges (server/receiver side), only slightly lower while crossing over the net, and after
+// the first leg a single deep bounce on the far side (no bounce right after the hitter's side).
+/** Peak height multiplier at the table edges in the serve-then-rally look. */
+const val SERVE_RALLY_PEAK_AMPLITUDE_AT_EDGES = 1f
+private const val SERVE_RALLY_PEAK_AMPLITUDE_AT_CENTER = 0.82f
+private const val SERVE_RALLY_EDGE_DOWN_OFFSET_RATIO = 0f
+private const val SERVE_RALLY_BOUNCE_POSITION_RATIO = 0.68f
+
 class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private val vertexShaderCode = """
@@ -108,6 +117,15 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     fun resetAnimationPhase() {
         startTime = 0L
+    }
+
+    /** Uses the serve-then-rally look shared by the match screen and the splash screen. */
+    fun useServeThenRallyStyle() {
+        peakAmplitudeAtEdges = SERVE_RALLY_PEAK_AMPLITUDE_AT_EDGES
+        peakAmplitudeAtCenter = SERVE_RALLY_PEAK_AMPLITUDE_AT_CENTER
+        edgeDownOffsetRatio = SERVE_RALLY_EDGE_DOWN_OFFSET_RATIO
+        enableServeThenRallyBounce = true
+        rallyBouncePositionRatio = SERVE_RALLY_BOUNCE_POSITION_RATIO
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {

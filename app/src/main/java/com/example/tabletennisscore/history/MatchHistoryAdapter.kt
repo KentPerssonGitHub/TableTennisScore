@@ -172,7 +172,6 @@ class MatchHistoryAdapter(
                 createScoreRow(
                     name = winnerName,
                     nameColor = ContextCompat.getColor(itemView.context, R.color.score_text),
-                    nameBold = false,
                     setCount = if (result.winner == 1) result.sets1 else result.sets2,
                     setCountColor = ContextCompat.getColor(itemView.context, R.color.score_text),
                     setCountBackgroundRes = R.drawable.history_set_count_box,
@@ -185,7 +184,6 @@ class MatchHistoryAdapter(
                 createScoreRow(
                     name = loserName,
                     nameColor = ContextCompat.getColor(itemView.context, R.color.player_name),
-                    nameBold = false,
                     setCount = if (result.winner == 1) result.sets2 else result.sets1,
                     setCountColor = ContextCompat.getColor(itemView.context, R.color.score_text),
                     setCountBackgroundRes = R.drawable.history_set_count_box_loser,
@@ -199,7 +197,6 @@ class MatchHistoryAdapter(
         private fun createScoreRow(
             name: String,
             nameColor: Int,
-            nameBold: Boolean,
             setCount: Int,
             setCountColor: Int,
             setCountBackgroundRes: Int,
@@ -217,22 +214,17 @@ class MatchHistoryAdapter(
                     if (!isMatchWinnerRow) topMargin = 2.dp()
                 }
 
-                addView(createNameCell(name, nameColor, nameBold))
+                addView(createNameCell(name, nameColor))
                 addView(createSetCountCell(setCount.toString(), setCountColor, setCountBackgroundRes))
                 addView(createSeparatorCell())
                 playerScores.forEachIndexed { index, score ->
                     val otherScore = opponentScores.getOrElse(index) { 0 }
                     val isWinningGame = score > otherScore
-                    val scoreColor = when {
-                        isWinningGame && isMatchWinnerRow -> ContextCompat.getColor(itemView.context, R.color.score_text)
-                        isWinningGame -> ContextCompat.getColor(itemView.context, R.color.score_text)
-                        else -> ContextCompat.getColor(itemView.context, R.color.history_loser_text)
-                    }
-                    val scoreSizeSp = when {
-                        isWinningGame && isMatchWinnerRow -> 18f
-                        else -> 18f
-                    }
-                    addView(createScoreCell(score.toString(), scoreColor, scoreSizeSp))
+                    val scoreColor = ContextCompat.getColor(
+                        itemView.context,
+                        if (isWinningGame) R.color.score_text else R.color.history_loser_text,
+                    )
+                    addView(createScoreCell(score.toString(), scoreColor))
                 }
             }
         }
@@ -282,13 +274,12 @@ class MatchHistoryAdapter(
                 addView(createStackedNameBlock(
                     winnerName,
                     ContextCompat.getColor(itemView.context, R.color.score_text),
-                    true,
                     15f,
                 ))
             })
         }
 
-        private fun createNameCell(name: String, color: Int, bold: Boolean): View {
+        private fun createNameCell(name: String, color: Int): View {
             val isDoubles = name.contains(" / ")
             if (!isDoubles) {
                 return TextView(itemView.context).apply {
@@ -298,21 +289,20 @@ class MatchHistoryAdapter(
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    if (bold) setTypeface(typeface, Typeface.NORMAL)
                     layoutParams = LinearLayout.LayoutParams(130.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                         marginEnd = 10.dp()
                     }
                 }
             }
 
-            return createStackedNameBlock(name, color, bold, 13f).apply {
+            return createStackedNameBlock(name, color, 13f).apply {
                 layoutParams = LinearLayout.LayoutParams(130.dp(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                     marginEnd = 10.dp()
                 }
             }
         }
 
-        private fun createStackedNameBlock(name: String, color: Int, bold: Boolean, textSizeSp: Float): LinearLayout {
+        private fun createStackedNameBlock(name: String, color: Int, textSizeSp: Float): LinearLayout {
             val names = name.split(" / ")
             return LinearLayout(itemView.context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -326,7 +316,6 @@ class MatchHistoryAdapter(
                         maxLines = 1
                         ellipsize = TextUtils.TruncateAt.END
                         gravity = Gravity.START
-                        if (bold) setTypeface(typeface, Typeface.NORMAL)
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -369,11 +358,11 @@ class MatchHistoryAdapter(
             }
         }
 
-        private fun createScoreCell(text: String, color: Int, sizeSp: Float): TextView {
+        private fun createScoreCell(text: String, color: Int): TextView {
             return TextView(itemView.context).apply {
                 this.text = text
                 setTextColor(color)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 setTypeface(typeface, Typeface.NORMAL)
                 layoutParams = LinearLayout.LayoutParams(

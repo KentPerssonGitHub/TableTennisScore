@@ -86,10 +86,10 @@ state: GameViewModel.GameState,
     val dividerColor = ContextCompat.getColor(this, R.color.divider)
     fun Int.dp() = (this * density).toInt()
 
-    // Ökad storlek på fyrkanten för set-vinster (från 24dp till 34dp)
+    // Size of the square showing the number of sets won
     val setBoxSize = 28.dp()
 
-    // Höjda textstorlekar (från 15f till 20f) och bredder (minW)
+    // Text sizes are in sp; minW and the margins are in dp
     fun cell(
         text: String,
         textSizeSp: Float,

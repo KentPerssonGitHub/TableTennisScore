@@ -11,18 +11,13 @@ import android.view.animation.LinearInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.ColorUtils
 import kotlin.math.abs
 
 class SplashActivity : AppCompatActivity() {
 
     companion object {
         private const val FLASH_COLOR = -0x2f2f30
-        // Matches the in-game (match screen) serve-then-rally shape: tall peaks at the table
-        // edges, only slightly lower over the net, and a single deep bounce per rally leg.
-        private const val SPLASH_PEAK_AMPLITUDE_AT_EDGES = 1f
-        private const val SPLASH_PEAK_AMPLITUDE_AT_CENTER = 0.82f
-        private const val SPLASH_EDGE_DOWN_OFFSET_RATIO = 0f
-        private const val SPLASH_RALLY_BOUNCE_POSITION_RATIO = 0.68f
     }
 
     private var hasContinued = false
@@ -129,30 +124,11 @@ class SplashActivity : AppCompatActivity() {
                         (1f - shifted) / 0.5f
                     }.coerceIn(0f, 1f)
 
-                    letterView.setTextColor(blendColors(baseColor, flashColor, intensity))
+                    letterView.setTextColor(ColorUtils.blendARGB(baseColor, flashColor, intensity))
                 }
             }
             start()
         }
-    }
-
-    private fun blendColors(startColor: Int, endColor: Int, fraction: Float): Int {
-        val clamped = fraction.coerceIn(0f, 1f)
-        val startA = Color.alpha(startColor)
-        val startR = Color.red(startColor)
-        val startG = Color.green(startColor)
-        val startB = Color.blue(startColor)
-        val endA = Color.alpha(endColor)
-        val endR = Color.red(endColor)
-        val endG = Color.green(endColor)
-        val endB = Color.blue(endColor)
-
-        val a = (startA + ((endA - startA) * clamped)).toInt()
-        val r = (startR + ((endR - startR) * clamped)).toInt()
-        val g = (startG + ((endG - startG) * clamped)).toInt()
-        val b = (startB + ((endB - startB) * clamped)).toInt()
-
-        return Color.argb(a, r, g, b)
     }
 
     private fun startSplashBallAnimationWhenReady() {
@@ -187,11 +163,7 @@ class SplashActivity : AppCompatActivity() {
             this.arcHeight = arcHeight
             this.ballWidth = ballSize
             this.ballHeight = ballSize
-            this.peakAmplitudeAtEdges = SPLASH_PEAK_AMPLITUDE_AT_EDGES
-            this.peakAmplitudeAtCenter = SPLASH_PEAK_AMPLITUDE_AT_CENTER
-            this.edgeDownOffsetRatio = SPLASH_EDGE_DOWN_OFFSET_RATIO
-            this.enableServeThenRallyBounce = true
-            this.rallyBouncePositionRatio = SPLASH_RALLY_BOUNCE_POSITION_RATIO
+            useServeThenRallyStyle()
             this.isAnimating = true
         }
     }

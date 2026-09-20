@@ -12,7 +12,6 @@ import com.example.tabletennisscore.data.MatchResult
 import androidx.core.content.edit
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * Holds all game state and enforces table tennis scoring rules.
@@ -32,7 +31,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         const val MAX_TOURNAMENT_NAME_LENGTH = 40
         const val MATCH_MODE_SINGLES = "SINGLES"
         const val MATCH_MODE_DOUBLES = "DOUBLES"
-        private const val PREFS_NAME = "table_tennis_prefs"
         private const val KEY_SINGLES_PLAYER1_NAME = "singles_p1_name"
         private const val KEY_SINGLES_PLAYER2_NAME = "singles_p2_name"
         private const val KEY_DOUBLES_TEAM1_PLAYER_A = "doubles_t1_a"
@@ -75,7 +73,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val team2PlayerB: String = "",
     )
 
-    private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = application.getSharedPreferences(APP_PREFS_NAME, Context.MODE_PRIVATE)
     private val nameStore = PlayerNameStore(prefs)
 
     private val _state = MutableLiveData(
