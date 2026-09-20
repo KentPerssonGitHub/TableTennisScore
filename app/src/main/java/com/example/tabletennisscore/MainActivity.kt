@@ -56,7 +56,13 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private const val BALL_ANIMATION_OVER_NET = 70f
+private const val SERVE_BOUNCE_TRAVEL_OVERFLOW = 0.05f
+private const val SERVE_BOUNCE_HEIGHT_RATIO = 0.20f
+// Match serve arc: tall near the table edges (server/receiver side), only slightly lower
+// while crossing over the net in the middle, matching the reference serve-bounce artwork.
+private const val MATCH_PEAK_AMPLITUDE_AT_EDGES = 1f
+private const val MATCH_PEAK_AMPLITUDE_AT_CENTER = 0.82f
+private const val MATCH_EDGE_DOWN_OFFSET_RATIO = 0f
 private const val BAT_IDLE_SWING_ANGLE = 52f
 private const val BAT_SWING_ANGLE = 34f
 private const val BAT_SWING_WINDOW = 0.085f
@@ -729,6 +735,48 @@ class MainActivity : AppCompatActivity() {
         val fourth: D,
     )
 
+    /**
+     * [ivTableBackground] is a full-screen ImageView (fitCenter + a 1.08 extra scale), so its raw
+     * view bounds are the whole screen, not the actual rendered table graphic. On top of that, the
+     * `bg_table_tennis_table` vector asset itself draws the green playing surface as a small inset
+     * rectangle (57,31.62 .. 217,120.38) inside a much larger 274x152 canvas, so ~20.8% margin on
+     * every side is baked into the artwork. This computes the real on-screen rectangle of just the
+     * green table surface so the ball only travels edge-to-edge of the table itself.
+     */
+    private fun computeTableDisplayRect(imageView: View): TableDisplayRect? {
+        val drawable = (imageView as? android.widget.ImageView)?.drawable ?: return null
+        val intrinsicWidth = drawable.intrinsicWidth.toFloat()
+        val intrinsicHeight = drawable.intrinsicHeight.toFloat()
+        val viewWidth = imageView.width.toFloat()
+        val viewHeight = imageView.height.toFloat()
+        if (intrinsicWidth <= 0f || intrinsicHeight <= 0f || viewWidth <= 0f || viewHeight <= 0f) return null
+
+        val fitScale = minOf(viewWidth / intrinsicWidth, viewHeight / intrinsicHeight)
+        val displayedWidth = intrinsicWidth * fitScale * imageView.scaleX
+        val displayedHeight = intrinsicHeight * fitScale * imageView.scaleY
+
+        val centerX = imageView.x + viewWidth / 2f
+        val centerY = imageView.y + viewHeight / 2f
+
+        val canvasLeft = centerX - displayedWidth / 2f
+        val canvasTop = centerY - displayedHeight / 2f
+
+        // Green table region within the 274x152 vector viewport.
+        val greenLeftRatio = 57f / 274f
+        val greenTopRatio = 31.62f / 152f
+        val greenWidthRatio = 160f / 274f
+        val greenHeightRatio = 88.76f / 152f
+
+        return TableDisplayRect(
+            left = canvasLeft + (displayedWidth * greenLeftRatio),
+            top = canvasTop + (displayedHeight * greenTopRatio),
+            width = displayedWidth * greenWidthRatio,
+            height = displayedHeight * greenHeightRatio,
+        )
+    }
+
+    private data class TableDisplayRect(val left: Float, val top: Float, val width: Float, val height: Float)
+
     private fun startRallyBallAnimationIfNeeded() {
         binding.rootLayout.post {
             val latestState = viewModel.state.value ?: return@post
@@ -737,44 +785,36 @@ class MainActivity : AppCompatActivity() {
                 return@post
             }
 
-            val leftScore = binding.tvScore1
-            val rightScore = binding.tvScore2
-            val net = binding.divider
+            val tableRect = computeTableDisplayRect(binding.ivTableBackground) ?: return@post
+            val tableWidth = tableRect.width
+            val tableHeight = tableRect.height
+            if (tableWidth <= 0f || tableHeight <= 0f) return@post
 
-            val dividerCenterX = net.x + (net.width / 2f)
-            val leftScoreCenterX = leftScore.x + (leftScore.width / 2f)
-            val rightScoreCenterX = rightScore.x + (rightScore.width / 2f)
-            val halfTravel = minOf(
-                dividerCenterX - leftScoreCenterX,
-                rightScoreCenterX - dividerCenterX,
-            ) * 0.68f
-            if (halfTravel <= 0f) return@post
+            val tableLeft = tableRect.left
+            val tableTop = tableRect.top
+            val travelOverflow = tableWidth * SERVE_BOUNCE_TRAVEL_OVERFLOW
 
-            val leftCenterX = dividerCenterX - halfTravel
-            val rightCenterX = dividerCenterX + halfTravel
-            
             val ballWidth = 20 * resources.displayMetrics.density
             val ballHeight = 20 * resources.displayMetrics.density
-            
-            val leftX = leftCenterX - (ballWidth / 2f)
-            val rightX = rightCenterX - (ballWidth / 2f)
+
+            val travelStartX = (tableLeft - travelOverflow) - (ballWidth / 2f)
+            val travelEndX = (tableLeft + tableWidth + travelOverflow) - (ballWidth / 2f)
+
             val p1OnLeft = !latestState.sidesSwapped
             val serverOnLeft = (p1OnLeft && latestState.server == 1) || (!p1OnLeft && latestState.server == 2)
-            val startX = if (serverOnLeft) leftX else rightX
-            val endX = if (serverOnLeft) rightX else leftX
+            val startX = if (serverOnLeft) travelStartX else travelEndX
+            val endX = if (serverOnLeft) travelEndX else travelStartX
 
-            val density = resources.displayMetrics.density
-            val desiredArc = abs(rightX - leftX) * 0.10f
-            val tableHitArcHeight = maxOf(18f * density, minOf(52f * density, desiredArc))
-            val netClearanceBoost = BALL_ANIMATION_OVER_NET * density
-            val arcHeight = tableHitArcHeight + netClearanceBoost
-            // Keep the table-hit height unchanged while allowing extra lift over the net.
-            val baseCenterY = (binding.rootLayout.height * 0.50f) + tableHitArcHeight
-            val baseY = baseCenterY - (ballHeight / 2f)
+            val bounceLineY = tableTop + (tableHeight * 0.50f)
+            val baseY = bounceLineY - (ballHeight / 2f)
+            val arcHeight = tableHeight * SERVE_BOUNCE_HEIGHT_RATIO
             val shouldRestartCycle = !binding.glRallyBall.renderer.isAnimating || rallyStartsFromLeft != serverOnLeft
-
-            updateRallyBatPositions(leftX, rightX, baseY, ballWidth, ballHeight)
             rallyStartsFromLeft = serverOnLeft
+
+            // Bats stay at the fixed left/right table ends and meet the ball at its edge-peak
+            // height (t=0/1), matching the current bounce shape without altering it.
+            val contactY = baseY - (arcHeight * MATCH_PEAK_AMPLITUDE_AT_EDGES)
+            updateRallyBatPositions(travelStartX, travelEndX, contactY, ballWidth, ballHeight)
 
             binding.glRallyBall.renderer.apply {
                 if (shouldRestartCycle) {
@@ -786,6 +826,9 @@ class MainActivity : AppCompatActivity() {
                 this.arcHeight = arcHeight
                 this.ballWidth = ballWidth
                 this.ballHeight = ballHeight
+                this.peakAmplitudeAtEdges = MATCH_PEAK_AMPLITUDE_AT_EDGES
+                this.peakAmplitudeAtCenter = MATCH_PEAK_AMPLITUDE_AT_CENTER
+                this.edgeDownOffsetRatio = MATCH_EDGE_DOWN_OFFSET_RATIO
                 this.isAnimating = true
             }
 

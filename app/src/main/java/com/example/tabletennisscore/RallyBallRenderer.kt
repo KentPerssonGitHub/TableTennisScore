@@ -13,7 +13,12 @@ import java.nio.FloatBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
+
+private const val DEFAULT_PEAK_AMPLITUDE_AT_EDGES = 0.45f
+private const val DEFAULT_PEAK_AMPLITUDE_AT_CENTER = 1f
+private const val DEFAULT_EDGE_DOWN_OFFSET_RATIO = 0.10f
 
 class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
@@ -76,9 +81,15 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
     var arcHeight = 0f
     var ballWidth = 20f
     var ballHeight = 20f
-    
+    /** Peak height multiplier at t=0/1 (ball arriving/leaving near the table edges). */
+    var peakAmplitudeAtEdges = DEFAULT_PEAK_AMPLITUDE_AT_EDGES
+    /** Peak height multiplier at t=0.5 (ball crossing over the net). */
+    var peakAmplitudeAtCenter = DEFAULT_PEAK_AMPLITUDE_AT_CENTER
+    /** Extra downward push applied only near t=0/1, as a ratio of arcHeight. */
+    var edgeDownOffsetRatio = DEFAULT_EDGE_DOWN_OFFSET_RATIO
+
     private var startTime = 0L
-    private val duration = 1500L
+    private val duration = 1800L
     val fullCycleDurationMillis: Long
         get() = duration * 2
 
@@ -123,7 +134,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
 
         textureId = loadTexture(context, R.drawable.stigaperform40size128)
-        
+
         GLES20.glEnable(GLES20.GL_BLEND)
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
     }
@@ -145,9 +156,14 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val t = if (tRaw > 1f) 2f - tRaw else tRaw
         
         val currentX = leftX + (rightX - leftX) * t
-        val netArc = sin(PI.toFloat() * t)
-        val currentY = baseY - (arcHeight * netArc)
-        
+        // Serve path: peak -> bounce -> peak -> bounce -> peak, with the two edge peaks
+        // (near the table ends) and the center peak (over the net) independently tunable.
+        val bounceWave = abs(sin((2f * PI.toFloat() * t) - (PI.toFloat() / 2f)))
+        val edgeFactor = abs((2f * t) - 1f) // 1 at t=0/1 (edges), 0 at t=0.5 (center)
+        val amplitude = peakAmplitudeAtCenter + (peakAmplitudeAtEdges - peakAmplitudeAtCenter) * edgeFactor
+        val edgeDownOffset = arcHeight * edgeDownOffsetRatio * edgeFactor
+        val currentY = baseY - (arcHeight * bounceWave * amplitude) + edgeDownOffset
+
         val spinDirection = if (tRaw > 1f) -1f else 1f
         val rotation = (elapsed.toFloat() / duration) * 360f * 3f * spinDirection
 
