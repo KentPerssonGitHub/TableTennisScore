@@ -1,5 +1,6 @@
 package com.example.tabletennisscore
 
+import java.util.Locale
 import kotlin.math.abs
 
 /** Shared table-tennis scoring helpers used by both game logic and detail screens. */
@@ -153,4 +154,12 @@ fun recalculateDoublesOrderForCurrentSetEdit(
         player1Name = composeDoublesTeamName(editedTeam1A, editedTeam1B),
         player2Name = composeDoublesTeamName(editedTeam2A, editedTeam2B),
     )
+}
+
+/** Normalizes a stored or entered match mode to one of the two known modes. */
+fun sanitizeMatchMode(value: String?): String {
+    return when (value?.trim()?.uppercase(Locale.ROOT)) {
+        GameViewModel.MATCH_MODE_DOUBLES -> GameViewModel.MATCH_MODE_DOUBLES
+        else -> GameViewModel.MATCH_MODE_SINGLES
+    }
 }
