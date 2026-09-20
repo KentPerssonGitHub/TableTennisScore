@@ -13,7 +13,6 @@ import androidx.core.content.edit
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.util.Locale
-import kotlin.math.abs
 
 /**
  * Holds all game state and enforces table tennis scoring rules.
@@ -42,7 +41,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_DOUBLES_TEAM2_PLAYER_B = "doubles_t2_b"
         private const val KEY_PLAYER1_NAME = "p1_name"
         private const val KEY_PLAYER2_NAME = "p2_name"
-        private const val KEY_PLAYER_NAME_GROUP = "player_name_group_json"
         private const val KEY_TOURNAMENT_NAME = "tournament_name"
         private const val KEY_MATCH_IN_PROGRESS = "match_in_progress"
         private const val KEY_MATCH_FIRST_SERVER = "match_first_server"
@@ -78,6 +76,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val nameStore = PlayerNameStore(prefs)
 
     private val _state = MutableLiveData(
         GameState(
@@ -195,121 +194,111 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun addPoint(player: Int) {
         if (!current.isMatchRunning || current.matchWinner != null) return
         pushHistory()
-        val s = current
-        var score1 = s.score1
-        var score2 = s.score2
-        var sets1 = s.sets1
-        var sets2 = s.sets2
-        var isMatchRunning = s.isMatchRunning
-        var matchWinner = s.matchWinner
-        var sidesSwapped = s.sidesSwapped
-        var decidingSetFiveSwapDone = s.decidingSetFiveSwapDone
-        var decidingSetSwapNoticeVersion = s.decidingSetSwapNoticeVersion
-        var awaitingDecidingSetSwapConfirmation = s.awaitingDecidingSetSwapConfirmation
-        var resumeAfterDecidingSetSwapConfirmation = s.resumeAfterDecidingSetSwapConfirmation
-        var team1PlayerA = s.team1PlayerA
-        var team1PlayerB = s.team1PlayerB
-        var team2PlayerA = s.team2PlayerA
-        var team2PlayerB = s.team2PlayerB
-        var player1Name = s.player1Name
-        var player2Name = s.player2Name
-        val setResults = s.setResults.toMutableList()
-        val newPointHistory = s.pointHistory.map { it.toMutableList() }.toMutableList()
+        _state.value = applyPoint(current, player)
+        saveMatchInProgress()
+    }
 
-        if (player == 1) score1++ else score2++
-        if (newPointHistory.isEmpty()) newPointHistory.add(mutableListOf())
-        newPointHistory.last().add(player)
-
-        if (isDecidingSet(sets1, sets2, s.bestOfSets) &&
-            !decidingSetFiveSwapDone &&
-            (score1 >= 5 || score2 >= 5)
-        ) {
-            sidesSwapped = !sidesSwapped
-            decidingSetFiveSwapDone = true
-            decidingSetSwapNoticeVersion++
-            captureElapsedUntilNow()
-            isMatchRunning = false
-            awaitingDecidingSetSwapConfirmation = true
-            resumeAfterDecidingSetSwapConfirmation = true
+    /** The state after [player] wins a point in state [s], including a possible end of set or match. */
+    private fun applyPoint(s: GameState, player: Int): GameState {
+        var next = recordPoint(s, player)
+        next = swapSidesAtFiveInDecidingSet(s, next)
+        next = updateServerAfterPoint(s, next)
+        if (isSetWon(next.score1, next.score2)) {
+            next = finishSet(s, next, player)
         }
+        return next
+    }
 
-        val totalPoints = score1 + score2
-        var server = nextServer(score1, score2, totalPoints, currentSetFirstServer(s.setResults.size))
+    private fun recordPoint(s: GameState, player: Int): GameState {
+        val pointHistory = s.pointHistory.ifEmpty { listOf(emptyList()) }
+        return s.copy(
+            score1 = if (player == 1) s.score1 + 1 else s.score1,
+            score2 = if (player == 1) s.score2 else s.score2 + 1,
+            pointHistory = pointHistory.dropLast(1) + listOf(pointHistory.last() + player),
+        )
+    }
 
-        // In doubles, rotate the in-team server order whenever that team's service turn ends.
-        if (s.matchMode == MATCH_MODE_DOUBLES && server != s.server) {
-            if (s.server == 1) {
-                val previousTop = team1PlayerA
-                team1PlayerA = team1PlayerB
-                team1PlayerB = previousTop
-                player1Name = composeDoublesTeamName(team1PlayerA, team1PlayerB)
-            } else {
-                val previousTop = team2PlayerA
-                team2PlayerA = team2PlayerB
-                team2PlayerB = previousTop
-                player2Name = composeDoublesTeamName(team2PlayerA, team2PlayerB)
-            }
+    /** In a deciding set the players switch ends once, when the first player reaches 5 points. */
+    private fun swapSidesAtFiveInDecidingSet(s: GameState, next: GameState): GameState {
+        val shouldSwap = isDecidingSet(next.sets1, next.sets2, s.bestOfSets) &&
+            !next.decidingSetFiveSwapDone &&
+            (next.score1 >= 5 || next.score2 >= 5)
+        if (!shouldSwap) return next
+
+        captureElapsedUntilNow()
+        return next.copy(
+            sidesSwapped = !next.sidesSwapped,
+            decidingSetFiveSwapDone = true,
+            decidingSetSwapNoticeVersion = next.decidingSetSwapNoticeVersion + 1,
+            isMatchRunning = false,
+            awaitingDecidingSetSwapConfirmation = true,
+            resumeAfterDecidingSetSwapConfirmation = true,
+        )
+    }
+
+    /** Sets the next server from the new score and, in doubles, rotates a team whose service turn ended. */
+    private fun updateServerAfterPoint(s: GameState, next: GameState): GameState {
+        val totalPoints = next.score1 + next.score2
+        val server = nextServer(next.score1, next.score2, totalPoints, currentSetFirstServer(s.setResults.size))
+        val updated = next.copy(server = server)
+        if (s.matchMode != MATCH_MODE_DOUBLES || server == s.server) return updated
+
+        return if (s.server == 1) {
+            updated.copy(
+                team1PlayerA = updated.team1PlayerB,
+                team1PlayerB = updated.team1PlayerA,
+                player1Name = composeDoublesTeamName(updated.team1PlayerB, updated.team1PlayerA),
+            )
+        } else {
+            updated.copy(
+                team2PlayerA = updated.team2PlayerB,
+                team2PlayerB = updated.team2PlayerA,
+                player2Name = composeDoublesTeamName(updated.team2PlayerB, updated.team2PlayerA),
+            )
         }
+    }
 
-        // Check if set is won
-        if (isSetWon(score1, score2)) {
-            setResults.add(Pair(score1, score2))
-            if (player == 1) sets1++ else sets2++
-            score1 = 0
-            score2 = 0
-
-            if (isMatchWon(sets1, sets2, s.bestOfSets)) {
-                matchWinner = player
-                isMatchRunning = false
-                captureElapsedUntilNow()
-                saveMatchResult(
-                    tournamentName = s.tournamentName,
-                    player1Name = player1Name,
-                    player2Name = player2Name,
-                    matchMode = sanitizeMatchMode(s.matchMode),
-                    sets1 = sets1,
-                    sets2 = sets2,
-                    winner = player,
-                    bestOfSets = s.bestOfSets,
-                    setResults = setResults,
-                    pointHistory = newPointHistory,
-                    matchFirstServer = matchFirstServer,
-                    matchRound = s.matchRound,
-                )
-                // Match over â€” do NOT swap sides
-            } else {
-                sidesSwapped = !sidesSwapped // players switch ends after each set
-                server = currentSetFirstServer(setResults.size)
-                newPointHistory.add(mutableListOf())
-            }
-            decidingSetFiveSwapDone = false
-            awaitingDecidingSetSwapConfirmation = false
-            resumeAfterDecidingSetSwapConfirmation = false
-        }
-
-        _state.value = s.copy(
-            player1Name = player1Name,
-            player2Name = player2Name,
-            score1 = score1,
-            score2 = score2,
+    /** Records the finished set. Ends the match, or switches ends and starts the next set. */
+    private fun finishSet(s: GameState, next: GameState, player: Int): GameState {
+        val setResults = next.setResults + (next.score1 to next.score2)
+        val sets1 = next.sets1 + if (player == 1) 1 else 0
+        val sets2 = next.sets2 + if (player == 1) 0 else 1
+        val afterSet = next.copy(
+            score1 = 0,
+            score2 = 0,
             sets1 = sets1,
             sets2 = sets2,
-            server = server,
-            isMatchRunning = isMatchRunning,
-            matchWinner = matchWinner,
             setResults = setResults,
-            pointHistory = newPointHistory,
-            sidesSwapped = sidesSwapped,
-            decidingSetFiveSwapDone = decidingSetFiveSwapDone,
-            decidingSetSwapNoticeVersion = decidingSetSwapNoticeVersion,
-            awaitingDecidingSetSwapConfirmation = awaitingDecidingSetSwapConfirmation,
-            resumeAfterDecidingSetSwapConfirmation = resumeAfterDecidingSetSwapConfirmation,
-            team1PlayerA = team1PlayerA,
-            team1PlayerB = team1PlayerB,
-            team2PlayerA = team2PlayerA,
-            team2PlayerB = team2PlayerB,
+            decidingSetFiveSwapDone = false,
+            awaitingDecidingSetSwapConfirmation = false,
+            resumeAfterDecidingSetSwapConfirmation = false,
         )
-        saveMatchInProgress()
+
+        if (!isMatchWon(sets1, sets2, s.bestOfSets)) {
+            return afterSet.copy(
+                sidesSwapped = !afterSet.sidesSwapped, // players switch ends after each set
+                server = currentSetFirstServer(setResults.size),
+                pointHistory = afterSet.pointHistory + listOf(emptyList()),
+            )
+        }
+
+        // Match over: do NOT swap sides.
+        captureElapsedUntilNow()
+        saveMatchResult(
+            tournamentName = s.tournamentName,
+            player1Name = afterSet.player1Name,
+            player2Name = afterSet.player2Name,
+            matchMode = sanitizeMatchMode(s.matchMode),
+            sets1 = sets1,
+            sets2 = sets2,
+            winner = player,
+            bestOfSets = s.bestOfSets,
+            setResults = setResults,
+            pointHistory = afterSet.pointHistory,
+            matchFirstServer = matchFirstServer,
+            matchRound = s.matchRound,
+        )
+        return afterSet.copy(matchWinner = player, isMatchRunning = false)
     }
 
     fun undo() {
@@ -370,44 +359,32 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updatePausedScore(score1: Int, score2: Int): Boolean {
-        if (current.isMatchRunning || current.matchWinner != null || !current.hasMatchStarted) return false
+        if (!canEditPausedScores()) return false
         if (score1 < 0 || score2 < 0) return false
         if (isSetWon(score1, score2)) return false
 
         pushHistory()
-        val totalPoints = score1 + score2
-        val server = nextServer(score1, score2, totalPoints, currentSetFirstServer(current.setResults.size))
+        val server = nextServer(score1, score2, score1 + score2, currentSetFirstServer(current.setResults.size))
         val editedDoubles = recalculateDoublesOrderForCurrentSetEdit(
             state = current,
             editedScore1 = score1,
             editedScore2 = score2,
             editedCompletedSetCount = current.setResults.size,
+            matchFirstServer = matchFirstServer,
         )
-        _state.value = current.copy(
-            player1Name = editedDoubles?.player1Name ?: current.player1Name,
-            player2Name = editedDoubles?.player2Name ?: current.player2Name,
+        _state.value = current.withDoublesOrder(editedDoubles).copy(
             score1 = score1,
             score2 = score2,
             server = server,
-            team1PlayerA = editedDoubles?.team1PlayerA ?: current.team1PlayerA,
-            team1PlayerB = editedDoubles?.team1PlayerB ?: current.team1PlayerB,
-            team2PlayerA = editedDoubles?.team2PlayerA ?: current.team2PlayerA,
-            team2PlayerB = editedDoubles?.team2PlayerB ?: current.team2PlayerB,
         )
         return true
     }
 
     fun updatePausedMatchScores(setResults: List<Pair<Int, Int>>, currentScore1: Int, currentScore2: Int): Boolean {
-        if (current.isMatchRunning || current.matchWinner != null || !current.hasMatchStarted) return false
+        if (!canEditPausedScores()) return false
         if (currentScore1 < 0 || currentScore2 < 0) return false
 
-        var sets1 = 0
-        var sets2 = 0
-        for ((set1, set2) in setResults) {
-            if (set1 < 0 || set2 < 0) return false
-            if (!isSetWon(set1, set2)) return false
-            if (set1 > set2) sets1++ else sets2++
-        }
+        val (sets1, sets2) = countSetWins(setResults) ?: return false
         if (isMatchWon(sets1, sets2, current.bestOfSets)) return false
 
         pushHistory()
@@ -416,108 +393,134 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             editedScore1 = currentScore1,
             editedScore2 = currentScore2,
             editedCompletedSetCount = setResults.size,
+            matchFirstServer = matchFirstServer,
         )
-        val editedPlayer1Name = editedDoubles?.player1Name ?: current.player1Name
-        val editedPlayer2Name = editedDoubles?.player2Name ?: current.player2Name
-        val editedTeam1A = editedDoubles?.team1PlayerA ?: current.team1PlayerA
-        val editedTeam1B = editedDoubles?.team1PlayerB ?: current.team1PlayerB
-        val editedTeam2A = editedDoubles?.team2PlayerA ?: current.team2PlayerA
-        val editedTeam2B = editedDoubles?.team2PlayerB ?: current.team2PlayerB
-
-        if (isSetWon(currentScore1, currentScore2)) {
-            // Current set score is a finished set â€” finalize it
-            val setWinner = if (currentScore1 > currentScore2) 1 else 2
-            val finalSets1 = sets1 + if (setWinner == 1) 1 else 0
-            val finalSets2 = sets2 + if (setWinner == 2) 1 else 0
-            val finalSetResults = setResults + listOf(currentScore1 to currentScore2)
-            val matchWinner = if (isMatchWon(finalSets1, finalSets2, current.bestOfSets)) setWinner else null
-            
-            // For manual score updates, we can't reliably reconstruct point history.
-            // We'll clear it for simplicity or represent it as empty for the edited sets.
-            val finalPointHistory = finalSetResults.map { emptyList<Int>() }
-
-            // Only swap sides if the match is not over
-            val newSidesSwapped = if (matchWinner != null) current.sidesSwapped else !current.sidesSwapped
-            if (matchWinner != null) {
-                saveMatchResult(
-                    tournamentName = current.tournamentName,
-                    player1Name = editedPlayer1Name,
-                    player2Name = editedPlayer2Name,
-                    matchMode = sanitizeMatchMode(current.matchMode),
-                    sets1 = finalSets1,
-                    sets2 = finalSets2,
-                    winner = matchWinner,
-                    bestOfSets = current.bestOfSets,
-                    setResults = finalSetResults,
-                    pointHistory = finalPointHistory,
-                    matchFirstServer = matchFirstServer,
-                    matchRound = current.matchRound,
-                )
-            }
-            _state.value = current.copy(
-                player1Name = editedPlayer1Name,
-                player2Name = editedPlayer2Name,
-                score1 = 0,
-                score2 = 0,
-                sets1 = finalSets1,
-                sets2 = finalSets2,
-                setResults = finalSetResults,
-                pointHistory = if (matchWinner == null) finalPointHistory + listOf(emptyList()) else finalPointHistory,
-                server = currentSetFirstServer(finalSetResults.size),
-                isMatchRunning = false,
-                matchWinner = matchWinner,
-                sidesSwapped = newSidesSwapped,
-                decidingSetFiveSwapDone = false,
-                awaitingDecidingSetSwapConfirmation = false,
-                resumeAfterDecidingSetSwapConfirmation = false,
-                matchRound = current.matchRound,
-                team1PlayerA = editedTeam1A,
-                team1PlayerB = editedTeam1B,
-                team2PlayerA = editedTeam2A,
-                team2PlayerB = editedTeam2B,
-            )
+        val base = current.withDoublesOrder(editedDoubles)
+        _state.value = if (isSetWon(currentScore1, currentScore2)) {
+            withEditedSetFinished(base, setResults, sets1, sets2, currentScore1, currentScore2)
         } else {
-            val server = nextServer(
-                currentScore1,
-                currentScore2,
-                currentScore1 + currentScore2,
-                currentSetFirstServer(setResults.size),
-            )
-            val shouldSwapAtFive = isDecidingSet(sets1, sets2, current.bestOfSets) &&
-                !current.decidingSetFiveSwapDone &&
-                (currentScore1 >= 5 || currentScore2 >= 5)
-            val updatedSides = if (shouldSwapAtFive) !current.sidesSwapped else current.sidesSwapped
-            val updatedNoticeVersion = if (shouldSwapAtFive) {
-                current.decidingSetSwapNoticeVersion + 1
-            } else {
-                current.decidingSetSwapNoticeVersion
-            }
-            
-            // Manual edit: clear point history for reconstructed sets
-            val manualPointHistory = setResults.map { emptyList<Int>() } + listOf(emptyList())
-
-            _state.value = current.copy(
-                player1Name = editedPlayer1Name,
-                player2Name = editedPlayer2Name,
-                score1 = currentScore1,
-                score2 = currentScore2,
-                sets1 = sets1,
-                sets2 = sets2,
-                setResults = setResults,
-                pointHistory = manualPointHistory,
-                server = server,
-                sidesSwapped = updatedSides,
-                decidingSetFiveSwapDone = isDecidingSet(sets1, sets2, current.bestOfSets) && (currentScore1 >= 5 || currentScore2 >= 5),
-                decidingSetSwapNoticeVersion = updatedNoticeVersion,
-                awaitingDecidingSetSwapConfirmation = shouldSwapAtFive,
-                resumeAfterDecidingSetSwapConfirmation = false,
-                team1PlayerA = editedTeam1A,
-                team1PlayerB = editedTeam1B,
-                team2PlayerA = editedTeam2A,
-                team2PlayerB = editedTeam2B,
-            )
+            withEditedSetInProgress(base, setResults, sets1, sets2, currentScore1, currentScore2)
         }
         return true
+    }
+
+    private fun canEditPausedScores(): Boolean {
+        return !current.isMatchRunning && current.matchWinner == null && current.hasMatchStarted
+    }
+
+    /** Number of sets won by each player, or null when any entered set is not a valid finished set. */
+    private fun countSetWins(setResults: List<Pair<Int, Int>>): Pair<Int, Int>? {
+        var sets1 = 0
+        var sets2 = 0
+        for ((set1, set2) in setResults) {
+            if (set1 < 0 || set2 < 0) return null
+            if (!isSetWon(set1, set2)) return null
+            if (set1 > set2) sets1++ else sets2++
+        }
+        return sets1 to sets2
+    }
+
+    private fun GameState.withDoublesOrder(order: DoublesOrder?): GameState {
+        if (order == null) return this
+        return copy(
+            player1Name = order.player1Name,
+            player2Name = order.player2Name,
+            team1PlayerA = order.team1PlayerA,
+            team1PlayerB = order.team1PlayerB,
+            team2PlayerA = order.team2PlayerA,
+            team2PlayerB = order.team2PlayerB,
+        )
+    }
+
+    /** The edited current-set score is itself a finished set: finalize it (and the match, if that decides it). */
+    private fun withEditedSetFinished(
+        base: GameState,
+        setResults: List<Pair<Int, Int>>,
+        sets1: Int,
+        sets2: Int,
+        currentScore1: Int,
+        currentScore2: Int,
+    ): GameState {
+        val setWinner = if (currentScore1 > currentScore2) 1 else 2
+        val finalSets1 = sets1 + if (setWinner == 1) 1 else 0
+        val finalSets2 = sets2 + if (setWinner == 2) 1 else 0
+        val finalSetResults = setResults + listOf(currentScore1 to currentScore2)
+        val matchWinner = if (isMatchWon(finalSets1, finalSets2, base.bestOfSets)) setWinner else null
+
+        // For manual score updates, we can't reliably reconstruct point history,
+        // so it is represented as empty for the edited sets.
+        val finalPointHistory = finalSetResults.map { emptyList<Int>() }
+
+        if (matchWinner != null) {
+            saveMatchResult(
+                tournamentName = base.tournamentName,
+                player1Name = base.player1Name,
+                player2Name = base.player2Name,
+                matchMode = sanitizeMatchMode(base.matchMode),
+                sets1 = finalSets1,
+                sets2 = finalSets2,
+                winner = matchWinner,
+                bestOfSets = base.bestOfSets,
+                setResults = finalSetResults,
+                pointHistory = finalPointHistory,
+                matchFirstServer = matchFirstServer,
+                matchRound = base.matchRound,
+            )
+        }
+        return base.copy(
+            score1 = 0,
+            score2 = 0,
+            sets1 = finalSets1,
+            sets2 = finalSets2,
+            setResults = finalSetResults,
+            pointHistory = if (matchWinner == null) finalPointHistory + listOf(emptyList()) else finalPointHistory,
+            server = currentSetFirstServer(finalSetResults.size),
+            isMatchRunning = false,
+            matchWinner = matchWinner,
+            // Only swap sides if the match is not over
+            sidesSwapped = if (matchWinner != null) base.sidesSwapped else !base.sidesSwapped,
+            decidingSetFiveSwapDone = false,
+            awaitingDecidingSetSwapConfirmation = false,
+            resumeAfterDecidingSetSwapConfirmation = false,
+        )
+    }
+
+    /** The edited current-set score is still an unfinished set. */
+    private fun withEditedSetInProgress(
+        base: GameState,
+        setResults: List<Pair<Int, Int>>,
+        sets1: Int,
+        sets2: Int,
+        currentScore1: Int,
+        currentScore2: Int,
+    ): GameState {
+        val server = nextServer(
+            currentScore1,
+            currentScore2,
+            currentScore1 + currentScore2,
+            currentSetFirstServer(setResults.size),
+        )
+        val reachedFiveInDecidingSet = isDecidingSet(sets1, sets2, base.bestOfSets) &&
+            (currentScore1 >= 5 || currentScore2 >= 5)
+        val shouldSwapAtFive = reachedFiveInDecidingSet && !base.decidingSetFiveSwapDone
+
+        // Manual edit: clear point history for reconstructed sets
+        val manualPointHistory = setResults.map { emptyList<Int>() } + listOf(emptyList())
+
+        return base.copy(
+            score1 = currentScore1,
+            score2 = currentScore2,
+            sets1 = sets1,
+            sets2 = sets2,
+            setResults = setResults,
+            pointHistory = manualPointHistory,
+            server = server,
+            sidesSwapped = if (shouldSwapAtFive) !base.sidesSwapped else base.sidesSwapped,
+            decidingSetFiveSwapDone = reachedFiveInDecidingSet,
+            decidingSetSwapNoticeVersion = base.decidingSetSwapNoticeVersion + if (shouldSwapAtFive) 1 else 0,
+            awaitingDecidingSetSwapConfirmation = shouldSwapAtFive,
+            resumeAfterDecidingSetSwapConfirmation = false,
+        )
     }
 
     fun setupMatch(
@@ -661,28 +664,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun getPlayerNameGroup(): List<String> {
-        return loadPlayerNameGroup()
+        return nameStore.load(currentPlayerNames())
     }
 
     fun setPlayerNameGroup(names: List<String>) {
-        val cleaned = names
-            .map { sanitizePlayerName(it, "") }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.lowercase(Locale.ROOT) }
-            .sortedBy { it.lowercase(Locale.ROOT) }
-        prefs.edit { putString(KEY_PLAYER_NAME_GROUP, Gson().toJson(cleaned)) }
+        nameStore.replaceAll(names)
     }
 
     fun addPlayerNameToGroup(name: String) {
-        val normalized = sanitizePlayerName(name, "")
-        if (normalized.isBlank()) return
-        val existing = loadPlayerNameGroup().toMutableList()
-        if (existing.none { it.equals(normalized, ignoreCase = true) }) {
-            existing.add(normalized)
-            existing.sortBy { it.lowercase(Locale.ROOT) }
-            prefs.edit { putString(KEY_PLAYER_NAME_GROUP, Gson().toJson(existing)) }
-        }
+        nameStore.add(name, currentPlayerNames())
     }
+
+    private fun currentPlayerNames() = listOf(current.player1Name, current.player2Name)
 
     fun setTournamentName(name: String) {
         val sanitized = sanitizeTournamentName(name)
@@ -694,53 +687,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = current.copy(matchRound = round)
     }
 
-    private fun sanitizePlayerName(name: String, fallback: String): String {
-        return normalizeNameInput(name)
-            .take(MAX_PLAYER_NAME_LENGTH)
-            .ifEmpty { fallback }
-    }
-
-    private fun sanitizeTournamentName(name: String): String {
-        return normalizeNameInput(name).take(MAX_TOURNAMENT_NAME_LENGTH)
-    }
-
-    private fun normalizeNameInput(value: String): String {
-        return normalizeTitleCaseWords(value)
-    }
-
     private fun sanitizeMatchMode(value: String?): String {
         return when (value?.trim()?.uppercase(Locale.ROOT)) {
             MATCH_MODE_DOUBLES -> MATCH_MODE_DOUBLES
             else -> MATCH_MODE_SINGLES
-        }
-    }
-
-    private fun composeDoublesTeamName(playerA: String, playerB: String): String {
-        return "$playerA / $playerB"
-    }
-
-    private fun loadPlayerNameGroup(): List<String> {
-        val raw = prefs.getString(KEY_PLAYER_NAME_GROUP, null)
-        if (raw.isNullOrBlank()) {
-            val defaults = listOf(current.player1Name, current.player2Name)
-                .map { sanitizePlayerName(it, "") }
-                .filter { it.isNotBlank() }
-                .distinctBy { it.lowercase(Locale.ROOT) }
-                .sortedBy { it.lowercase(Locale.ROOT) }
-            if (defaults.isNotEmpty()) {
-                prefs.edit { putString(KEY_PLAYER_NAME_GROUP, Gson().toJson(defaults)) }
-            }
-            return defaults
-        }
-        return try {
-            val parsed = Gson().fromJson(raw, Array<String>::class.java)?.toList().orEmpty()
-            parsed
-                .map { sanitizePlayerName(it, "") }
-                .filter { it.isNotBlank() }
-                .distinctBy { it.lowercase(Locale.ROOT) }
-                .sortedBy { it.lowercase(Locale.ROOT) }
-        } catch (_: Exception) {
-            emptyList()
         }
     }
 
@@ -790,113 +740,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         history.addLast(current)
     }
 
-    private data class DoublesOrder(
-        val team1PlayerA: String,
-        val team1PlayerB: String,
-        val team2PlayerA: String,
-        val team2PlayerB: String,
-        val player1Name: String,
-        val player2Name: String,
-    )
-
-    private fun recalculateDoublesOrderForCurrentSetEdit(
-        state: GameState,
-        editedScore1: Int,
-        editedScore2: Int,
-        editedCompletedSetCount: Int,
-    ): DoublesOrder? {
-        if (state.matchMode != MATCH_MODE_DOUBLES) return null
-        if (editedCompletedSetCount != state.setResults.size) return null
-
-        val firstServer = currentSetFirstServer(editedCompletedSetCount)
-        val (oldTeam1ServiceTurns, oldTeam2ServiceTurns) = countCompletedServiceTurnsByTeam(
-            score1 = state.score1,
-            score2 = state.score2,
-            firstServer = firstServer,
-        )
-
-        var setStartTeam1A = state.team1PlayerA
-        var setStartTeam1B = state.team1PlayerB
-        var setStartTeam2A = state.team2PlayerA
-        var setStartTeam2B = state.team2PlayerB
-
-        if (oldTeam1ServiceTurns % 2 != 0) {
-            setStartTeam1A = state.team1PlayerB
-            setStartTeam1B = state.team1PlayerA
-        }
-        if (oldTeam2ServiceTurns % 2 != 0) {
-            setStartTeam2A = state.team2PlayerB
-            setStartTeam2B = state.team2PlayerA
-        }
-
-        val (newTeam1ServiceTurns, newTeam2ServiceTurns) = countCompletedServiceTurnsByTeam(
-            score1 = editedScore1,
-            score2 = editedScore2,
-            firstServer = firstServer,
-        )
-
-        var editedTeam1A = setStartTeam1A
-        var editedTeam1B = setStartTeam1B
-        var editedTeam2A = setStartTeam2A
-        var editedTeam2B = setStartTeam2B
-
-        if (newTeam1ServiceTurns % 2 != 0) {
-            editedTeam1A = setStartTeam1B
-            editedTeam1B = setStartTeam1A
-        }
-        if (newTeam2ServiceTurns % 2 != 0) {
-            editedTeam2A = setStartTeam2B
-            editedTeam2B = setStartTeam2A
-        }
-
-        return DoublesOrder(
-            team1PlayerA = editedTeam1A,
-            team1PlayerB = editedTeam1B,
-            team2PlayerA = editedTeam2A,
-            team2PlayerB = editedTeam2B,
-            player1Name = composeDoublesTeamName(editedTeam1A, editedTeam1B),
-            player2Name = composeDoublesTeamName(editedTeam2A, editedTeam2B),
-        )
-    }
-
-    private fun countCompletedServiceTurnsByTeam(score1: Int, score2: Int, firstServer: Int): Pair<Int, Int> {
-        val totalPoints = score1 + score2
-        if (totalPoints <= 0) return 0 to 0
-
-        var previousServer = firstServer
-        var team1ServiceTurns = 0
-        var team2ServiceTurns = 0
-        val isDeucePhase = score1 >= 10 && score2 >= 10
-
-        for (pointIndex in 1..totalPoints) {
-            val simulatedScore1: Int
-            val simulatedScore2: Int
-            if (isDeucePhase && pointIndex >= 20) {
-                simulatedScore1 = 10 + (pointIndex - 20)
-                simulatedScore2 = 10
-            } else {
-                simulatedScore1 = 0
-                simulatedScore2 = pointIndex
-            }
-
-            val currentServer = nextServer(
-                s1 = simulatedScore1,
-                s2 = simulatedScore2,
-                total = pointIndex,
-                firstServer = firstServer,
-            )
-
-            if (currentServer != previousServer) {
-                if (previousServer == 1) team1ServiceTurns++ else team2ServiceTurns++
-            }
-            previousServer = currentServer
-        }
-
-        return team1ServiceTurns to team2ServiceTurns
-    }
-
     private fun currentSetFirstServer(completedSetCount: Int): Int {
-        return if (completedSetCount % 2 == 0) matchFirstServer else otherPlayer(matchFirstServer)
+        return firstServerOfSet(matchFirstServer, completedSetCount)
     }
 
     private fun captureElapsedUntilNow() {
@@ -904,20 +749,4 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         elapsedPlayedMs += SystemClock.elapsedRealtime() - startedAt
         runningSinceMs = null
     }
-
-    private fun isSetWon(s1: Int, s2: Int): Boolean {
-        return (s1 >= 11 || s2 >= 11) && abs(s1 - s2) >= 2
-    }
-
-    private fun isMatchWon(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
-        val setsToWin = (bestOfSets / 2) + 1
-        return sets1 >= setsToWin || sets2 >= setsToWin
-    }
-
-    private fun isDecidingSet(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
-        if (bestOfSets < 5) return false
-        val setsToWin = (bestOfSets / 2) + 1
-        return sets1 == setsToWin - 1 && sets2 == setsToWin - 1
-    }
-
 }
