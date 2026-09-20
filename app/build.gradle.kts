@@ -35,6 +35,10 @@ android {
         viewBinding = true
     }
     compileSdkMinor = 2
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -49,4 +53,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.gson)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

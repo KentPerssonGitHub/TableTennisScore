@@ -211,3 +211,19 @@ class ScoringRulesTest {
         assertEquals("Ann / Bea", composeDoublesTeamName("Ann", "Bea"))
     }
 }
+
+class MatchModeTest {
+
+    @Test
+    fun knownModesAreNormalizedIgnoringCaseAndSpaces() {
+        assertEquals(GameViewModel.MATCH_MODE_DOUBLES, sanitizeMatchMode(" Doubles "))
+        assertEquals(GameViewModel.MATCH_MODE_SINGLES, sanitizeMatchMode("singles"))
+    }
+
+    @Test
+    fun unknownOrMissingModesBecomeSingles() {
+        assertEquals(GameViewModel.MATCH_MODE_SINGLES, sanitizeMatchMode("mixed"))
+        assertEquals(GameViewModel.MATCH_MODE_SINGLES, sanitizeMatchMode(""))
+        assertEquals(GameViewModel.MATCH_MODE_SINGLES, sanitizeMatchMode(null))
+    }
+}
