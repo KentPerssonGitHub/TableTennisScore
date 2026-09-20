@@ -1,14 +1,13 @@
 package com.example.tabletennisscore.history
+import com.example.tabletennisscore.dialogs.styleChoiceChip
+import com.example.tabletennisscore.dialogs.outlinedButton
+import com.example.tabletennisscore.dialogs.dp
 import com.example.tabletennisscore.dialogs.showPlayerNamePickerDialog
 import com.example.tabletennisscore.GameViewModel
 import com.example.tabletennisscore.R
 
-import android.content.res.ColorStateList
-import android.graphics.Color
 import android.text.InputFilter
 import android.text.InputType
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -24,7 +23,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.tabletennisscore.data.MatchResult
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 
@@ -65,30 +63,7 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
         p2Edit.setOnClickListener { p2Edit.showDropDown() }
     }
 
-    val buttonDensity = resources.displayMetrics.density
-    fun buttonPx(dp: Int): Int = (dp * buttonDensity).toInt()
-
-    val selectFromGroupP1 = MaterialButton(this).apply {
-        text = getString(R.string.dialog_select_from_group)
-        isAllCaps = false
-        insetTop = 0
-        insetBottom = 0
-        minimumHeight = buttonPx(30)
-        minHeight = buttonPx(30)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-        setPadding(buttonPx(14), buttonPx(2), buttonPx(14), buttonPx(2))
-        setTextColor(ContextCompat.getColor(this@showEditMatchDetailsDialog, R.color.player_name))
-        strokeWidth = buttonPx(1)
-        strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@showEditMatchDetailsDialog, R.color.history_loser_text))
-        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-        cornerRadius = buttonPx(18)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = buttonPx(4)
-        }
+    val selectFromGroupP1 = outlinedButton(getString(R.string.dialog_select_from_group)).apply {
         isEnabled = nameGroup.isNotEmpty()
         alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
         setOnClickListener {
@@ -98,28 +73,7 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
             }
         }
     }
-    val selectFromGroupP2 = MaterialButton(this).apply {
-        text = getString(R.string.dialog_select_from_group)
-        isAllCaps = false
-        insetTop = 0
-        insetBottom = 0
-        minimumHeight = buttonPx(30)
-        minHeight = buttonPx(30)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-        setPadding(buttonPx(14), buttonPx(2), buttonPx(14), buttonPx(2))
-        setTextColor(ContextCompat.getColor(this@showEditMatchDetailsDialog, R.color.player_name))
-        strokeWidth = buttonPx(1)
-        strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this@showEditMatchDetailsDialog, R.color.history_loser_text))
-        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-        cornerRadius = buttonPx(18)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = buttonPx(4)
-            bottomMargin = buttonPx(8)
-        }
+    val selectFromGroupP2 = outlinedButton(getString(R.string.dialog_select_from_group), bottomMarginDp = 8).apply {
         isEnabled = nameGroup.isNotEmpty()
         alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
         setOnClickListener {
@@ -144,8 +98,7 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
         getString(R.string.round_final)
     )
     
-    val density = resources.displayMetrics.density
-    fun px(dp: Int): Int = (dp * density).toInt()
+    fun px(value: Int): Int = dp(value)
 
     val roundGroup = ChipGroup(this).apply {
         isSingleSelection = true
@@ -159,15 +112,7 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
     fun refreshRoundOutline() {
         for (i in 0 until roundGroup.childCount) {
             val chip = roundGroup.getChildAt(i) as? Chip ?: continue
-            val isSelected = (chip.tag as? String) == selectedRound
-            chip.chipBackgroundColor = ColorStateList.valueOf(Color.TRANSPARENT)
-            chip.chipStrokeWidth = if (isSelected) px(2).toFloat() else px(1).toFloat()
-            chip.chipStrokeColor = ColorStateList.valueOf(
-                ContextCompat.getColor(this@showEditMatchDetailsDialog, if (isSelected) R.color.score_text else R.color.history_loser_text),
-            )
-            chip.setTextColor(
-                ContextCompat.getColor(this@showEditMatchDetailsDialog, if (isSelected) R.color.score_text else R.color.player_name),
-            )
+            styleChoiceChip(chip, (chip.tag as? String) == selectedRound)
         }
     }
     rounds.forEach { round ->
