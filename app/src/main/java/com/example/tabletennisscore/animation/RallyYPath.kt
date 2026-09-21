@@ -80,3 +80,14 @@ class RallyYPath(
         const val MIX_MULTIPLIER = 0x45d9f3b
     }
 }
+
+/** A bat hits backhand when it is this far into the downward range, measured from the middle line. */
+private const val BACKHAND_DEPTH_RATIO = 0.7f
+
+/**
+ * Whether a bat at the given vertical [offset] (pixels, positive is down) is so far down the table that it
+ * plays the ball backhand. [downSpread] is the lowest offset a return can reach.
+ */
+fun isBackhandHeight(offset: Float, downSpread: Float): Boolean {
+    return downSpread > 0f && offset > downSpread * BACKHAND_DEPTH_RATIO
+}

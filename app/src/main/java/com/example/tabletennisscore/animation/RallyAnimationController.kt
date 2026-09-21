@@ -1,5 +1,6 @@
 package com.example.tabletennisscore.animation
 import com.example.tabletennisscore.GameViewModel
+import com.example.tabletennisscore.R
 
 import android.animation.ValueAnimator
 import android.view.View
@@ -36,20 +37,30 @@ class RallyAnimationController(
     private var rallyStartsFromLeft = true
     private var lastRallyScoreKey: List<Int>? = null
     private var rallyBatAnimator: ValueAnimator? = null
-    private var batsPositioned = false
-    private var leftBatBaseY = 0f
-    private var rightBatBaseY = 0f
+    /** Where a bat's head meets the ball on the middle line, and the bat's swing angle at that moment. */
+    private class BatContact(val x: Float, val y: Float, val strikeRotation: Float)
+
+    private var leftContact: BatContact? = null
+    private var rightContact: BatContact? = null
+
+    // Each bat shows one color on its forehand and the other on its backhand side.
+    private val leftFlipper by lazy {
+        BatFlipper(binding.ivBatLeft, R.drawable.ic_table_tennis_bat_black, R.drawable.ic_table_tennis_bat)
+    }
+    private val rightFlipper by lazy {
+        BatFlipper(binding.ivBatRight, R.drawable.ic_table_tennis_bat, R.drawable.ic_table_tennis_bat_black)
+    }
 
     private val density: Float
         get() = binding.root.resources.displayMetrics.density
 
     fun resetBatAngles() {
+        leftFlipper.reset()
+        rightFlipper.reset()
         binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE
         binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE
-        if (batsPositioned) {
-            binding.ivBatLeft.y = leftBatBaseY
-            binding.ivBatRight.y = rightBatBaseY
-        }
+        leftContact?.let { placeBat(binding.ivBatLeft, it, heightOffset = 0f) }
+        rightContact?.let { placeBat(binding.ivBatRight, it, heightOffset = 0f) }
     }
 
     fun startIfNeeded() {
@@ -180,46 +191,40 @@ class RallyAnimationController(
         val rightHitCenterX = rightBallX + (ballWidth / 2f)
         val hitCenterY = baseY + (ballHeight / 2f)
 
-        binding.ivBatLeft.apply {
-            val strikeRotation = BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE
-            positionBatForContact(this, leftHitCenterX, hitCenterY, strikeRotation)
-        }
-
-        binding.ivBatRight.apply {
-            val strikeRotation = -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE)
-            positionBatForContact(this, rightHitCenterX, hitCenterY, strikeRotation)
-        }
-
-        // Where the bats rest on the middle line; they glide up and down from here to meet the ball.
-        leftBatBaseY = binding.ivBatLeft.y
-        rightBatBaseY = binding.ivBatRight.y
-        batsPositioned = true
+        val leftContact = BatContact(leftHitCenterX, hitCenterY, BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE)
+        val rightContact = BatContact(rightHitCenterX, hitCenterY, -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE))
+        this.leftContact = leftContact
+        this.rightContact = rightContact
+        placeBat(binding.ivBatLeft, leftContact, heightOffset = 0f)
+        placeBat(binding.ivBatRight, rightContact, heightOffset = 0f)
 
         if (rallyBatAnimator == null) {
             resetBatAngles()
         }
     }
 
-    private fun positionBatForContact(
-        batView: View,
-        contactCenterX: Float,
-        contactCenterY: Float,
-        strikeRotationDegrees: Float,
-    ) {
-        val pivotX = batView.width * 0.5f
-        val pivotY = batView.height * BAT_PIVOT_Y_RATIO
-        val headCenterX = batView.width * 0.5f
-        val headCenterY = batView.height * BAT_HEAD_CENTER_Y_RATIO
+    /**
+     * Sets the position of [bat] so that its head is at [contact] (moved [heightOffset] pixels down), taking
+     * into account that the bat may be turned over: [View.getScaleY] is 1 with the handle down, -1 with the
+     * handle up, and passes through 0 while it flips.
+     */
+    private fun placeBat(bat: View, contact: BatContact, heightOffset: Float) {
+        val verticalSign = bat.scaleY
+        val pivotX = bat.width * 0.5f
+        val pivotY = bat.height * BAT_PIVOT_Y_RATIO
+        val headCenterX = bat.width * 0.5f
+        val headCenterY = bat.height * BAT_HEAD_CENTER_Y_RATIO
         val dx = headCenterX - pivotX
-        val dy = headCenterY - pivotY
-        val radians = Math.toRadians(strikeRotationDegrees.toDouble())
+        val dy = (headCenterY - pivotY) * verticalSign
+        // A turned-over bat is the mirror image of the normal one, so its swing angle is mirrored too.
+        val radians = Math.toRadians((contact.strikeRotation * verticalSign).toDouble())
         val rotatedDx = (dx * cos(radians) - dy * sin(radians)).toFloat()
         val rotatedDy = (dx * sin(radians) + dy * cos(radians)).toFloat()
 
-        batView.pivotX = pivotX
-        batView.pivotY = pivotY
-        batView.x = contactCenterX - pivotX - rotatedDx
-        batView.y = contactCenterY - pivotY - rotatedDy
+        bat.pivotX = pivotX
+        bat.pivotY = pivotY
+        bat.x = contact.x - pivotX - rotatedDx
+        bat.y = contact.y + heightOffset - pivotY - rotatedDy
     }
 
     private fun startBatAnimation() {
@@ -248,15 +253,23 @@ class RallyAnimationController(
         val leftSwing = strikePulse(progress, leftStrikePoint)
         val rightSwing = strikePulse(progress, rightStrikePoint)
 
-        binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftSwing)
-        binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightSwing)
-
         // Follow the ball's up/down drift so each bat is at the right height when it hits.
         val renderer = binding.glRallyBall.renderer
         val path = renderer.yPath
         val legPosition = renderer.legPosition
-        binding.ivBatLeft.y = leftBatBaseY + path.batOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition)
-        binding.ivBatRight.y = rightBatBaseY + path.batOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition)
+        val leftOffset = path.batOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition)
+        val rightOffset = path.batOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition)
+
+        // Far down the table a bat plays the ball backhand: it turns over (handle up) and shows its other rubber.
+        val downSpread = renderer.returnYDownSpread
+        leftFlipper.setBackhand(isBackhandHeight(leftOffset, downSpread))
+        rightFlipper.setBackhand(isBackhandHeight(rightOffset, downSpread))
+
+        // A turned-over bat is the mirror image of the normal one, so it also swings the other way around.
+        binding.ivBatLeft.rotation = binding.ivBatLeft.scaleY * (BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftSwing))
+        binding.ivBatRight.rotation = binding.ivBatRight.scaleY * (-BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightSwing))
+        leftContact?.let { placeBat(binding.ivBatLeft, it, leftOffset) }
+        rightContact?.let { placeBat(binding.ivBatRight, it, rightOffset) }
     }
 
     private fun strikePulse(progress: Float, strikePoint: Float): Float {

@@ -268,4 +268,39 @@ class RallyYPathTest {
         assertEquals(0f, path.ballOffset(5.5f), delta)
         assertEquals(0f, path.batOffset(true, 5.5f), delta)
     }
+
+    // ----- Backhand -----
+
+    @Test
+    fun aBatFarDownTheTablePlaysBackhand() {
+        assertTrue(isBackhandHeight(offset = 55f, downSpread = 60f))
+        assertTrue(isBackhandHeight(offset = 60f, downSpread = 60f))
+    }
+
+    @Test
+    fun aBatOnTheMiddleLineOrUpTheTablePlaysForehand() {
+        assertTrue(!isBackhandHeight(offset = 0f, downSpread = 60f))
+        assertTrue(!isBackhandHeight(offset = -40f, downSpread = 60f))
+        assertTrue(!isBackhandHeight(offset = 30f, downSpread = 60f))
+    }
+
+    @Test
+    fun theBackhandLimitIsSeventyPercentOfTheDownwardRange() {
+        assertTrue(!isBackhandHeight(offset = 41.9f, downSpread = 60f))
+        assertTrue(isBackhandHeight(offset = 42.1f, downSpread = 60f))
+    }
+
+    @Test
+    fun noBatPlaysBackhandInAStraightRally() {
+        assertTrue(!isBackhandHeight(offset = 0f, downSpread = 0f))
+        assertTrue(!isBackhandHeight(offset = 10f, downSpread = 0f))
+    }
+
+    @Test
+    fun onlySomeReturnsAreHitBackhandButNotMostOfThem() {
+        val path = RallyYPath(2024, 40f, 60f)
+        val hits = (2..2_000).map { path.boundaryOffset(it) }
+        val backhandShare = hits.count { isBackhandHeight(it, 60f) } / hits.size.toDouble()
+        assertTrue("backhand share was $backhandShare", backhandShare in 0.05..0.30)
+    }
 }
