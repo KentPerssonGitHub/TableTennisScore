@@ -1,0 +1,82 @@
+package com.example.tabletennisscore.animation
+
+import kotlin.math.floor
+
+/**
+ * The sideways drift of a rally: where, up or down on the table, each hit of the ball ends.
+ *
+ * A rally is a series of legs. Leg 0 is the serve, leg 1 the first return, and so on. Boundary `k` is the
+ * moment leg `k - 1` ends and leg `k` starts, which is when a bat hits the ball. The serve starts and ends
+ * on the middle line; from the first return on, every hit lands at a new random height between [upSpread]
+ * pixels above and [downSpread] pixels below the middle line. The same [seed] always gives the same rally,
+ * so the ball and the bats, drawn on different threads, agree on where every hit is.
+ *
+ * Offsets are in pixels, positive is down. Spreads of 0 give the plain straight rally.
+ */
+class RallyYPath(
+    private val seed: Int,
+    private val upSpread: Float,
+    private val downSpread: Float = upSpread,
+) {
+
+    /** Vertical offset of the ball at the hit that ends leg `boundary - 1` and starts leg `boundary`. */
+    fun boundaryOffset(boundary: Int): Float {
+        if (boundary <= FIRST_RANDOM_BOUNDARY - 1) return 0f
+        val random = unitRandom(boundary) * 2f - 1f // -1 (highest) .. +1 (lowest)
+        return if (random < 0f) random * upSpread else random * downSpread
+    }
+
+    /** Vertical offset of the ball at [legPosition]: the leg number plus how far (0..1) it is through it. */
+    fun ballOffset(legPosition: Float): Float {
+        val leg = floor(legPosition).toInt()
+        val progress = legPosition - leg
+        val from = boundaryOffset(leg)
+        val to = boundaryOffset(leg + 1)
+        return from + (to - from) * progress
+    }
+
+    /**
+     * Vertical offset of a bat at [legPosition]. A bat hits every second boundary: the even ones when
+     * [strikesOnEvenBoundaries], otherwise the odd ones. After a hit it stays still while the ball flies
+     * to the other side and back. Only when the ball has passed the net on its way to the bat does the bat
+     * start to glide, smoothly, to the height of the next hit, arriving at rest exactly where the ball
+     * meets it.
+     */
+    fun batOffset(strikesOnEvenBoundaries: Boolean, legPosition: Float): Float {
+        val parity = if (strikesOnEvenBoundaries) 0 else 1
+        var previousStrike = floor(legPosition).toInt()
+        if (Math.floorMod(previousStrike, 2) != parity) previousStrike -= 1
+
+        val legsSinceStrike = legPosition - previousStrike
+        val fraction = ((legsSinceStrike - BAT_GLIDE_START) / (LEGS_BETWEEN_STRIKES - BAT_GLIDE_START))
+            .coerceIn(0f, 1f)
+        val eased = fraction * fraction * (3f - 2f * fraction)
+        val from = boundaryOffset(previousStrike)
+        val to = boundaryOffset(previousStrike + LEGS_BETWEEN_STRIKES)
+        return from + (to - from) * eased
+    }
+
+    /** A repeatable pseudo-random number in [0, 1) for [boundary]. */
+    private fun unitRandom(boundary: Int): Float {
+        var x = seed xor (boundary * GOLDEN_RATIO_HASH)
+        x = x xor (x ushr 16)
+        x *= MIX_MULTIPLIER
+        x = x xor (x ushr 16)
+        x *= MIX_MULTIPLIER
+        x = x xor (x ushr 16)
+        return (x ushr 8) / 16_777_216f
+    }
+
+    private companion object {
+        /** The serve (boundaries 0 and 1) stays on the middle line; returns start at boundary 2. */
+        const val FIRST_RANDOM_BOUNDARY = 2
+
+        /** A bat hits the ball every second boundary. */
+        const val LEGS_BETWEEN_STRIKES = 2
+
+        /** Legs after its own hit that the ball passes the net on its way back: the bat starts to move. */
+        const val BAT_GLIDE_START = 1.5f
+        const val GOLDEN_RATIO_HASH = -1640531535
+        const val MIX_MULTIPLIER = 0x45d9f3b
+    }
+}

@@ -13,6 +13,10 @@ import kotlin.math.sin
 
 private const val SERVE_BOUNCE_TRAVEL_OVERFLOW = 0.05f
 private const val SERVE_BOUNCE_HEIGHT_RATIO = 0.20f
+// How far above and below the middle line a return may end, as a share of the table height.
+// Downwards (towards the near edge) is allowed a bit further than upwards.
+private const val RETURN_Y_UP_SPREAD_RATIO = 0.16f
+private const val RETURN_Y_DOWN_SPREAD_RATIO = 0.40f
 private const val BAT_IDLE_SWING_ANGLE = 52f
 private const val BAT_SWING_ANGLE = 34f
 private const val BAT_SWING_WINDOW = 0.085f
@@ -32,6 +36,9 @@ class RallyAnimationController(
     private var rallyStartsFromLeft = true
     private var lastRallyScoreKey: List<Int>? = null
     private var rallyBatAnimator: ValueAnimator? = null
+    private var batsPositioned = false
+    private var leftBatBaseY = 0f
+    private var rightBatBaseY = 0f
 
     private val density: Float
         get() = binding.root.resources.displayMetrics.density
@@ -39,6 +46,10 @@ class RallyAnimationController(
     fun resetBatAngles() {
         binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE
         binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE
+        if (batsPositioned) {
+            binding.ivBatLeft.y = leftBatBaseY
+            binding.ivBatRight.y = rightBatBaseY
+        }
     }
 
     fun startIfNeeded() {
@@ -96,6 +107,8 @@ class RallyAnimationController(
                 this.ballWidth = ballWidth
                 this.ballHeight = ballHeight
                 useServeThenRallyStyle()
+                this.returnYUpSpread = tableHeight * RETURN_Y_UP_SPREAD_RATIO
+                this.returnYDownSpread = tableHeight * RETURN_Y_DOWN_SPREAD_RATIO
                 this.isAnimating = true
             }
 
@@ -177,6 +190,11 @@ class RallyAnimationController(
             positionBatForContact(this, rightHitCenterX, hitCenterY, strikeRotation)
         }
 
+        // Where the bats rest on the middle line; they glide up and down from here to meet the ball.
+        leftBatBaseY = binding.ivBatLeft.y
+        rightBatBaseY = binding.ivBatRight.y
+        batsPositioned = true
+
         if (rallyBatAnimator == null) {
             resetBatAngles()
         }
@@ -232,6 +250,13 @@ class RallyAnimationController(
 
         binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftSwing)
         binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightSwing)
+
+        // Follow the ball's up/down drift so each bat is at the right height when it hits.
+        val renderer = binding.glRallyBall.renderer
+        val path = renderer.yPath
+        val legPosition = renderer.legPosition
+        binding.ivBatLeft.y = leftBatBaseY + path.batOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition)
+        binding.ivBatRight.y = rightBatBaseY + path.batOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition)
     }
 
     private fun strikePulse(progress: Float, strikePoint: Float): Float {

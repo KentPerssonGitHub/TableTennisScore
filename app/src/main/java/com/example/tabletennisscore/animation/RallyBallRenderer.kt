@@ -17,6 +17,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.random.Random
 
 private const val DEFAULT_PEAK_AMPLITUDE_AT_EDGES = 0.45f
 private const val DEFAULT_PEAK_AMPLITUDE_AT_CENTER = 1f
@@ -110,13 +111,36 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
     /** Fraction of a rally leg (0..1) where the single bounce lands, deep on the far side. */
     var rallyBouncePositionRatio = DEFAULT_RALLY_BOUNCE_POSITION_RATIO
 
+    /**
+     * How far, in pixels, the ball's destination may drift above the middle line on each return
+     * (0 = always straight along the middle). Only used when [enableServeThenRallyBounce] is on.
+     */
+    @Volatile var returnYUpSpread = 0f
+
+    /** Like [returnYUpSpread], but how far the destination may drift below the middle line. */
+    @Volatile var returnYDownSpread = 0f
+
     private var startTime = 0L
+    @Volatile private var pathSeed = Random.nextInt()
     private val duration = 1800L
     val fullCycleDurationMillis: Long
         get() = duration * 2
 
+    /** The up/down drift of the current rally; a new random one starts with every animation restart. */
+    val yPath: RallyYPath
+        get() = RallyYPath(pathSeed, returnYUpSpread, returnYDownSpread)
+
+    /** The current leg number plus how far (0..1) the ball is through it; 0 before the first frame. */
+    val legPosition: Float
+        get() {
+            val started = startTime
+            if (started == 0L) return 0f
+            return (SystemClock.uptimeMillis() - started).toFloat() / duration
+        }
+
     fun resetAnimationPhase() {
         startTime = 0L
+        pathSeed = Random.nextInt()
     }
 
     /** Uses the serve-then-rally look shared by the match screen and the splash screen. */
@@ -220,7 +244,9 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 rightX + (leftX - rightX) * pLocal
             }
 
-            currentY = if (legIndex == 0L) {
+            val returnYOffset = yPath.ballOffset(legIndex + pLocal)
+
+            currentY = returnYOffset + if (legIndex == 0L) {
                 val bounceWave = abs(sin((2f * PI.toFloat() * pLocal) - (PI.toFloat() / 2f)))
                 val edgeFactor = abs((2f * pLocal) - 1f)
                 val amplitude = peakAmplitudeAtCenter + (peakAmplitudeAtEdges - peakAmplitudeAtCenter) * edgeFactor
