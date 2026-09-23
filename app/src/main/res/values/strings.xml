@@ -10,6 +10,8 @@
     <string name="btn_pause_match">Pause Match</string>
     <string name="btn_setup_match">New Match</string>
     <string name="btn_edit_score">Edit Score</string>
+    <string name="btn_hide_ingame">Hide In-game</string>
+    <string name="btn_show_ingame">Show In-game</string>
     <string name="match_timer_default">00:00</string>
     <string name="dialog_edit_name">Edit name</string>
     <string name="dialog_select_from_group">Select player name</string>

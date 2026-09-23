@@ -303,6 +303,17 @@
             android:background="@drawable/bg_center_menu_secondary_button"
             android:elevation="1dp"
             android:text="@string/btn_history" />
+
+        <!-- Only shown while a match is paused; hides the bats and rally ball so the focus is on the scoreboard. -->
+        <TextView
+            android:id="@+id/btnToggleInGame"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_center_menu_secondary_button"
+            android:elevation="1dp"
+            android:text="@string/btn_hide_ingame"
+            android:visibility="gone" />
     </LinearLayout>
 
     <com.google.android.material.button.MaterialButton

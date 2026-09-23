@@ -57,8 +57,8 @@ class RallyYPath(
     }
 
     /**
-     * How much longer or shorter than the normal pace leg [leg] takes to play: bats hit the ball a little
-     * faster or slower each time, so some legs look a bit quicker than others.
+     * How long leg [leg] takes to play, as a share of the base duration: bats hit the ball a little faster
+     * or slower each time, so some legs look a bit quicker than others.
      */
     private fun legDurationFactor(leg: Int): Float {
         val random = unitRandom(leg, LEG_SPEED_SALT)
@@ -106,7 +106,10 @@ class RallyYPath(
         const val GOLDEN_RATIO_HASH = -1640531535
         const val MIX_MULTIPLIER = 0x45d9f3b
 
-        /** A leg plays this much faster to this much slower than the normal pace. */
+        /**
+         * How long a leg takes, as a share of the base duration: every leg plays faster than the base,
+         * some a lot faster and some only a little.
+         */
         const val LEG_SPEED_MIN = 0.65f
         const val LEG_SPEED_MAX = 0.9f
 

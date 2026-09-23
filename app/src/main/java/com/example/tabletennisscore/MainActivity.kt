@@ -43,6 +43,8 @@ class MainActivity : AppCompatActivity() {
     private var decidingSwapSnackbar: Snackbar? = null
     private var previousIsMatchRunning = false
     private val rallyAnimation by lazy { RallyAnimationController(binding) { viewModel.state.value } }
+    private val prefs by lazy { getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE) }
+    private var showInGame = true
     private val timerHandler = Handler(Looper.getMainLooper())
     private val timerTick = object : Runnable {
         override fun run() {
@@ -59,6 +61,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         hideSystemBarsImmersive()
         rallyAnimation.resetBatAngles()
+        showInGame = prefs.getBoolean(PREF_SHOW_INGAME, true)
+        renderInGameVisibility()
 
         setupClickListeners()
         observeState()
@@ -167,6 +171,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnStartMatch.setOnClickListener { viewModel.startOrResumeMatch() }
         binding.btnPauseMatchText.setOnClickListener { viewModel.pauseMatch() }
         binding.btnUndoText.setOnClickListener { viewModel.undo() }
+        binding.btnToggleInGame.setOnClickListener {
+            showInGame = !showInGame
+            prefs.edit().putBoolean(PREF_SHOW_INGAME, showInGame).apply()
+            renderInGameVisibility()
+        }
         binding.btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
@@ -445,6 +454,7 @@ class MainActivity : AppCompatActivity() {
             binding.btnStartMatch.visibility = View.GONE
             binding.btnSetupMatch.visibility = View.GONE
             binding.btnHistory.visibility = View.GONE
+            binding.btnToggleInGame.visibility = View.GONE
 
             binding.centerControlsRow.visibility = View.VISIBLE
             binding.ivSwapSides.visibility = View.GONE
@@ -459,12 +469,27 @@ class MainActivity : AppCompatActivity() {
             binding.btnStartMatch.visibility = if (showControls) View.VISIBLE else View.GONE
             binding.btnSetupMatch.visibility = if (showControls) View.VISIBLE else View.GONE
             binding.btnHistory.visibility = if (showControls) View.VISIBLE else View.GONE
+            val isPausedMidMatch = state.hasMatchStarted && !isMatchFinished
+            binding.btnToggleInGame.visibility = if (showControls && isPausedMidMatch) View.VISIBLE else View.GONE
 
             binding.centerControlsRow.visibility = if (showControls) View.VISIBLE else View.GONE
             binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
             rallyAnimation.stop()
             stopMatchTimerTicker()
         }
+    }
+
+    /**
+     * Shows or hides the in-game animation: both bats and the rally ball. They are INVISIBLE rather than
+     * GONE when hidden, so they keep their size and the rally animation can go on placing them; they come
+     * back in the right spot when shown again.
+     */
+    private fun renderInGameVisibility() {
+        val inGameVisibility = if (showInGame) View.VISIBLE else View.INVISIBLE
+        binding.ivBatLeft.visibility = inGameVisibility
+        binding.ivBatRight.visibility = inGameVisibility
+        binding.glRallyBall.visibility = inGameVisibility
+        binding.btnToggleInGame.setText(if (showInGame) R.string.btn_hide_ingame else R.string.btn_show_ingame)
     }
 
     override fun onDestroy() {

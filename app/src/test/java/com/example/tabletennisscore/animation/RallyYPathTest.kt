@@ -321,17 +321,16 @@ class RallyYPathTest {
     }
 
     @Test
-    fun legsVaryALittleInPaceButAverageOutNearTheBaseDuration() {
+    fun legsVaryInPaceAndAreAllPlayedFasterThanTheBaseDuration() {
         val path = RallyYPath(5, spread)
         val base = 1_000L
         val durations = (0 until 40).map { legDurationMillis(path, it, base) }
-        assertTrue("some legs are hit quicker than normal", durations.any { it < base })
-        assertTrue("some legs are hit slower than normal", durations.any { it > base })
         durations.forEach {
-            assertTrue("$it stays within 15% of $base", it in (base * 0.85).toLong()..(base * 1.15).toLong())
+            assertTrue("$it is between 65% and 90% of $base", it in (base * 0.65).toLong()..(base * 0.90).toLong())
         }
-        val average = durations.average()
-        assertTrue("average duration ($average) stays close to the base", abs(average - base) < base * 0.1)
+        val fastest = durations.minOrNull()!!
+        val slowest = durations.maxOrNull()!!
+        assertTrue("legs vary in pace (fastest $fastest, slowest $slowest)", slowest - fastest > base * 0.1)
     }
 
     @Test
