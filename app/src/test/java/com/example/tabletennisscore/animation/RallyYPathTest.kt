@@ -5,6 +5,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.floor
 
 class RallyYPathTest {
 
@@ -302,5 +303,53 @@ class RallyYPathTest {
         val hits = (2..2_000).map { path.boundaryOffset(it) }
         val backhandShare = hits.count { isBackhandHeight(it, 60f) } / hits.size.toDouble()
         assertTrue("backhand share was $backhandShare", backhandShare in 0.05..0.30)
+    }
+
+    // ----- How fast each leg is hit -----
+
+    @Test
+    fun theRallyStartsAtLegPositionZero() {
+        val path = RallyYPath(5, spread)
+        assertEquals(0f, path.legPositionAt(0L, 1_000L), delta)
+    }
+
+    @Test
+    fun legPositionAdvancesLinearlyWithinALeg() {
+        val path = RallyYPath(5, spread)
+        val leg0Duration = legDurationMillis(path, leg = 0, baseDurationMillis = 1_000L)
+        assertEquals(0.5f, path.legPositionAt(leg0Duration / 2, 1_000L), 0.02f)
+    }
+
+    @Test
+    fun legsVaryALittleInPaceButAverageOutNearTheBaseDuration() {
+        val path = RallyYPath(5, spread)
+        val base = 1_000L
+        val durations = (0 until 40).map { legDurationMillis(path, it, base) }
+        assertTrue("some legs are hit quicker than normal", durations.any { it < base })
+        assertTrue("some legs are hit slower than normal", durations.any { it > base })
+        durations.forEach {
+            assertTrue("$it stays within 15% of $base", it in (base * 0.85).toLong()..(base * 1.15).toLong())
+        }
+        val average = durations.average()
+        assertTrue("average duration ($average) stays close to the base", abs(average - base) < base * 0.1)
+    }
+
+    @Test
+    fun theSamePaceComesFromTheSameSeedAndAnotherOneFromAnotherSeed() {
+        val first = RallyYPath(11, spread)
+        val again = RallyYPath(11, spread)
+        val other = RallyYPath(12, spread)
+        val base = 1_000L
+        assertEquals(legDurationMillis(first, 3, base), legDurationMillis(again, 3, base))
+        assertNotEquals(legDurationMillis(first, 3, base), legDurationMillis(other, 3, base))
+    }
+
+    /** How many milliseconds leg [leg] takes to play, found by stepping through [path]'s timeline. */
+    private fun legDurationMillis(path: RallyYPath, leg: Int, baseDurationMillis: Long): Long {
+        var elapsed = 0L
+        while (floor(path.legPositionAt(elapsed, baseDurationMillis)).toInt() < leg) elapsed += 1L
+        val start = elapsed
+        while (floor(path.legPositionAt(elapsed, baseDurationMillis)).toInt() == leg) elapsed += 1L
+        return elapsed - start
     }
 }

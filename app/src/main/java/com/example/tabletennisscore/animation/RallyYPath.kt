@@ -56,9 +56,36 @@ class RallyYPath(
         return from + (to - from) * eased
     }
 
-    /** A repeatable pseudo-random number in [0, 1) for [boundary]. */
-    private fun unitRandom(boundary: Int): Float {
-        var x = seed xor (boundary * GOLDEN_RATIO_HASH)
+    /**
+     * How much longer or shorter than the normal pace leg [leg] takes to play: bats hit the ball a little
+     * faster or slower each time, so some legs look a bit quicker than others.
+     */
+    private fun legDurationFactor(leg: Int): Float {
+        val random = unitRandom(leg, LEG_SPEED_SALT)
+        return LEG_SPEED_MIN + random * (LEG_SPEED_MAX - LEG_SPEED_MIN)
+    }
+
+    /**
+     * The leg position (the leg number plus how far, 0..1, through it) at [elapsedMillis] since the rally
+     * started, given [baseDurationMillis] as how long a leg takes at the normal pace. Each leg's own pace
+     * varies a little (see [legDurationFactor]), so some hits look a bit quicker or slower than others; the
+     * same [seed] always gives the same pacing, so the ball (drawn on one thread) and the bats (drawn on
+     * another) agree on when every leg ends.
+     */
+    fun legPositionAt(elapsedMillis: Long, baseDurationMillis: Long): Float {
+        var leg = 0
+        var remaining = elapsedMillis
+        while (true) {
+            val legDuration = (baseDurationMillis * legDurationFactor(leg)).toLong().coerceAtLeast(1L)
+            if (remaining < legDuration) return leg + remaining.toFloat() / legDuration.toFloat()
+            remaining -= legDuration
+            leg++
+        }
+    }
+
+    /** A repeatable pseudo-random number in [0, 1) for [index], one independent stream per [salt]. */
+    private fun unitRandom(index: Int, salt: Int = 0): Float {
+        var x = seed xor (index * GOLDEN_RATIO_HASH) xor salt
         x = x xor (x ushr 16)
         x *= MIX_MULTIPLIER
         x = x xor (x ushr 16)
@@ -78,6 +105,13 @@ class RallyYPath(
         const val BAT_GLIDE_START = 1.5f
         const val GOLDEN_RATIO_HASH = -1640531535
         const val MIX_MULTIPLIER = 0x45d9f3b
+
+        /** A leg plays this much faster to this much slower than the normal pace. */
+        const val LEG_SPEED_MIN = 0.85f
+        const val LEG_SPEED_MAX = 1.15f
+
+        /** Keeps leg-speed randomness independent of the Y-offset randomness, which uses the default salt. */
+        const val LEG_SPEED_SALT = 0x2545f491
     }
 }
 

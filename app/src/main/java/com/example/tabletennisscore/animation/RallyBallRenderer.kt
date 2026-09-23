@@ -16,6 +16,7 @@ import javax.microedition.khronos.opengles.GL10
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -135,7 +136,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         get() {
             val started = startTime
             if (started == 0L) return 0f
-            return (SystemClock.uptimeMillis() - started).toFloat() / duration
+            return yPath.legPositionAt(SystemClock.uptimeMillis() - started, duration)
         }
 
     fun resetAnimationPhase() {
@@ -234,8 +235,10 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
             // bounce deep on the far side before rising again to the other player, looping
             // indefinitely while alternating direction each leg.
             val totalElapsed = SystemClock.uptimeMillis() - startTime
-            val legIndex = totalElapsed / duration
-            val pLocal = (totalElapsed % duration).toFloat() / duration.toFloat()
+            val path = yPath
+            val legPositionNow = path.legPositionAt(totalElapsed, duration)
+            val legIndex = floor(legPositionNow).toLong()
+            val pLocal = legPositionNow - legIndex
             val forwardLeg = (legIndex % 2L) == 0L
 
             currentX = if (forwardLeg) {
@@ -244,7 +247,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 rightX + (leftX - rightX) * pLocal
             }
 
-            val returnYOffset = yPath.ballOffset(legIndex + pLocal)
+            val returnYOffset = path.ballOffset(legPositionNow)
 
             currentY = returnYOffset + if (legIndex == 0L) {
                 val bounceWave = abs(sin((2f * PI.toFloat() * pLocal) - (PI.toFloat() / 2f)))

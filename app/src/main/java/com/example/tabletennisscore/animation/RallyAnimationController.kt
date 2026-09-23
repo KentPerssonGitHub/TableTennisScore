@@ -8,8 +8,8 @@ import android.view.animation.LinearInterpolator
 import android.widget.ImageView
 import com.example.tabletennisscore.databinding.ActivityMainBinding
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 
 private const val SERVE_BOUNCE_TRAVEL_OVERFLOW = 0.05f
@@ -20,10 +20,33 @@ private const val RETURN_Y_UP_SPREAD_RATIO = 0.16f
 private const val RETURN_Y_DOWN_SPREAD_RATIO = 0.40f
 private const val BAT_IDLE_SWING_ANGLE = 52f
 private const val BAT_SWING_ANGLE = 34f
-private const val BAT_SWING_WINDOW = 0.085f
+// Before the strike a bat winds up towards the ball, part-way, holds there a while (its "top" position),
+// then snaps forward the rest of the way in; after the strike it eases back to rest. The windup starts
+// early, well before the ball arrives, reaching its top position with plenty of time to spare before the
+// short, fast final strike, which finishes exactly at the hit. Progress is over a 2-leg cycle, so a leg is
+// half of this unit; at the baseline pace (a leg a bit under 2 seconds) BAT_PAUSE_WINDOW alone is roughly
+// half a second of waiting, and BAT_STRIKE_WINDOW is a bit over half a second too.
+private const val BAT_BACKSWING_WINDOW = 0.495f
+private const val BAT_PAUSE_WINDOW = 0.19f
+private const val BAT_STRIKE_WINDOW = 0.105f
+// A share of BAT_SWING_ANGLE: how far towards the ball the top position already is, before the final snap
+// covers the rest. At 0.25 that was only ~8.5 degrees, too small next to the 34-degree forward stroke to
+// read as motion, so the windup went unnoticed and only the fast final strike was visible — as if the bat
+// waited until the ball had already arrived. Bigger, so the windup itself is unmistakable.
+private const val BAT_BACKSWING_PEAK = 0.55f
+private const val BAT_RECOVERY_WINDOW = 0.085f
+// Shifts the whole swing (windup, pause, strike, recovery) this much later, so the strike lands relative
+// to when the ball reaches the bat; negative (as tuned by feel) makes it land earlier instead. In progress
+// units; at the baseline pace this is about -200ms.
+private const val BAT_SWING_DELAY = -0.056f
 private const val BAT_HEAD_CENTER_Y_RATIO = 35f / 112f
-// Pivot near the middle of the handle/shaft (instead of its very end) for a more natural swing.
-private const val BAT_PIVOT_Y_RATIO = 0.66f
+// Pivot near the far end of the handle, like a wrist. The rubber (red/black) part that actually meets the
+// ball sits far from it, so the same swing angle sweeps that part through a much bigger arc than the
+// handle end, which stays close to the pivot and barely moves — the impact-making part does the visible work.
+private const val BAT_PIVOT_Y_RATIO = 0.85f
+// A bat also moves forward as it swings, not just rotates: pulled back at rest and further still at the
+// peak of the backswing, arriving exactly at the ball at the moment of the strike. As a share of its width.
+private const val BAT_FORWARD_TRAVEL_RATIO = 0.16f
 
 /**
  * Drives the match-mode serve/rally animation: the GL ball ([RallyBallRenderer]) and the two
@@ -37,8 +60,12 @@ class RallyAnimationController(
     private var rallyStartsFromLeft = true
     private var lastRallyScoreKey: List<Int>? = null
     private var rallyBatAnimator: ValueAnimator? = null
-    /** Where a bat's head meets the ball on the middle line, and the bat's swing angle at that moment. */
-    private class BatContact(val x: Float, val y: Float, val strikeRotation: Float)
+
+    /**
+     * Where a bat's head meets the ball on the middle line, the bat's swing angle at that moment, and
+     * which horizontal direction ([forwardSign]: +1 or -1) is "forward", into its stroke.
+     */
+    private class BatContact(val x: Float, val y: Float, val strikeRotation: Float, val forwardSign: Float)
 
     private var leftContact: BatContact? = null
     private var rightContact: BatContact? = null
@@ -59,8 +86,8 @@ class RallyAnimationController(
         rightFlipper.reset()
         binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE
         binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE
-        leftContact?.let { placeBat(binding.ivBatLeft, it, heightOffset = 0f) }
-        rightContact?.let { placeBat(binding.ivBatRight, it, heightOffset = 0f) }
+        leftContact?.let { placeBat(binding.ivBatLeft, it, heightOffset = 0f, swingValue = 0f) }
+        rightContact?.let { placeBat(binding.ivBatRight, it, heightOffset = 0f, swingValue = 0f) }
     }
 
     fun startIfNeeded() {
@@ -191,12 +218,13 @@ class RallyAnimationController(
         val rightHitCenterX = rightBallX + (ballWidth / 2f)
         val hitCenterY = baseY + (ballHeight / 2f)
 
-        val leftContact = BatContact(leftHitCenterX, hitCenterY, BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE)
-        val rightContact = BatContact(rightHitCenterX, hitCenterY, -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE))
+        val leftContact = BatContact(leftHitCenterX, hitCenterY, BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE, forwardSign = 1f)
+        val rightContact =
+            BatContact(rightHitCenterX, hitCenterY, -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE), forwardSign = -1f)
         this.leftContact = leftContact
         this.rightContact = rightContact
-        placeBat(binding.ivBatLeft, leftContact, heightOffset = 0f)
-        placeBat(binding.ivBatRight, rightContact, heightOffset = 0f)
+        placeBat(binding.ivBatLeft, leftContact, heightOffset = 0f, swingValue = 0f)
+        placeBat(binding.ivBatRight, rightContact, heightOffset = 0f, swingValue = 0f)
 
         if (rallyBatAnimator == null) {
             resetBatAngles()
@@ -204,11 +232,13 @@ class RallyAnimationController(
     }
 
     /**
-     * Sets the position of [bat] so that its head is at [contact] (moved [heightOffset] pixels down), taking
-     * into account that the bat may be turned over: [View.getScaleY] is 1 with the handle down, -1 with the
-     * handle up, and passes through 0 while it flips.
+     * Sets the position of [bat] so that its head is at [contact] (moved [heightOffset] pixels down) once
+     * [swingValue] reaches 1, the moment of the strike; at lower (or negative, backswing) values the bat
+     * also sits a little behind that point, so it visibly moves forward into the ball as it swings, not
+     * just rotates. Also accounts for the bat possibly being turned over: [View.getScaleY] is 1 with the
+     * handle down, -1 with the handle up, and passes through 0 while it flips.
      */
-    private fun placeBat(bat: View, contact: BatContact, heightOffset: Float) {
+    private fun placeBat(bat: View, contact: BatContact, heightOffset: Float, swingValue: Float) {
         val verticalSign = bat.scaleY
         val pivotX = bat.width * 0.5f
         val pivotY = bat.height * BAT_PIVOT_Y_RATIO
@@ -220,23 +250,23 @@ class RallyAnimationController(
         val radians = Math.toRadians((contact.strikeRotation * verticalSign).toDouble())
         val rotatedDx = (dx * cos(radians) - dy * sin(radians)).toFloat()
         val rotatedDy = (dx * sin(radians) + dy * cos(radians)).toFloat()
+        val forwardTravel = bat.width * BAT_FORWARD_TRAVEL_RATIO * (1f - swingValue) * contact.forwardSign
 
         bat.pivotX = pivotX
         bat.pivotY = pivotY
-        bat.x = contact.x - pivotX - rotatedDx
+        bat.x = contact.x - forwardTravel - pivotX - rotatedDx
         bat.y = contact.y + heightOffset - pivotY - rotatedDy
     }
 
     private fun startBatAnimation() {
         stopBatAnimation()
         rallyBatAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            // Duration/value are unused: this animator is only a frame ticker. The actual timing comes
+            // from the renderer's legPosition, which paces each leg a little differently (see updateBatAngles).
             duration = binding.glRallyBall.renderer.fullCycleDurationMillis
             interpolator = LinearInterpolator()
             repeatCount = ValueAnimator.INFINITE
-            addUpdateListener { animator ->
-                val progress = animator.animatedValue as Float
-                updateBatAngles(progress)
-            }
+            addUpdateListener { updateBatAngles() }
             start()
         }
     }
@@ -247,16 +277,21 @@ class RallyAnimationController(
         resetBatAngles()
     }
 
-    private fun updateBatAngles(progress: Float) {
-        val leftStrikePoint = if (rallyStartsFromLeft) 0f else 0.5f
-        val rightStrikePoint = if (rallyStartsFromLeft) 0.5f else 0f
-        val leftSwing = strikePulse(progress, leftStrikePoint)
-        val rightSwing = strikePulse(progress, rightStrikePoint)
-
-        // Follow the ball's up/down drift so each bat is at the right height when it hits.
+    private fun updateBatAngles() {
+        // Each bat hits once every 2 legs, so a strike cycle is 2 legs long; legs vary a little in speed
+        // (see RallyYPath.legPositionAt), and reading the swing timing from legPosition itself, rather
+        // than from a fixed-duration animator, keeps a bat's swing in step with its own hit even so.
         val renderer = binding.glRallyBall.renderer
         val path = renderer.yPath
         val legPosition = renderer.legPosition
+        val cycleProgress = (legPosition % 2f) / 2f
+
+        val leftStrikePoint = if (rallyStartsFromLeft) 0f else 0.5f
+        val rightStrikePoint = if (rallyStartsFromLeft) 0.5f else 0f
+        val leftSwing = strikePulse(cycleProgress, leftStrikePoint)
+        val rightSwing = strikePulse(cycleProgress, rightStrikePoint)
+
+        // Follow the ball's up/down drift so each bat is at the right height when it hits.
         val leftOffset = path.batOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition)
         val rightOffset = path.batOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition)
 
@@ -268,16 +303,42 @@ class RallyAnimationController(
         // A turned-over bat is the mirror image of the normal one, so it also swings the other way around.
         binding.ivBatLeft.rotation = binding.ivBatLeft.scaleY * (BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftSwing))
         binding.ivBatRight.rotation = binding.ivBatRight.scaleY * (-BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightSwing))
-        leftContact?.let { placeBat(binding.ivBatLeft, it, leftOffset) }
-        rightContact?.let { placeBat(binding.ivBatRight, it, rightOffset) }
+        leftContact?.let { placeBat(binding.ivBatLeft, it, leftOffset, leftSwing) }
+        rightContact?.let { placeBat(binding.ivBatRight, it, rightOffset, rightSwing) }
     }
 
+    /**
+     * How far a bat should swing at this point in its cycle, as a fraction of [BAT_SWING_ANGLE]: 0 at rest,
+     * rising to a partial "top" position (part-way towards the ball), holding there a moment, then a fast
+     * final snap the rest of the way up to +1, [BAT_SWING_DELAY] after the strike (swung fully into the
+     * ball). After the strike it eases back to rest.
+     */
     private fun strikePulse(progress: Float, strikePoint: Float): Float {
-        val directDistance = abs(progress - strikePoint)
-        val wrappedDistance = minOf(directDistance, 1f - directDistance)
-        if (wrappedDistance >= BAT_SWING_WINDOW) return 0f
+        var distance = progress - strikePoint - BAT_SWING_DELAY
+        distance -= floor(distance + 0.5f) // wrap into (-0.5, 0.5]
 
-        val normalizedDistance = 1f - (wrappedDistance / BAT_SWING_WINDOW)
-        return sin(normalizedDistance * (PI.toFloat() / 2f))
+        val pauseStart = -(BAT_STRIKE_WINDOW + BAT_PAUSE_WINDOW)
+        if (distance in -BAT_BACKSWING_WINDOW..pauseStart) {
+            // Slow windup: ease from rest to the top position, well before the strike.
+            val windUpSpan = BAT_BACKSWING_WINDOW - BAT_STRIKE_WINDOW - BAT_PAUSE_WINDOW
+            val windUp = (distance + BAT_BACKSWING_WINDOW) / windUpSpan // 0 at the start, 1 at the top position
+            val eased = windUp * windUp * (3f - 2f * windUp) // smoothstep
+            return BAT_BACKSWING_PEAK * eased
+        }
+        if (distance in pauseStart..(-BAT_STRIKE_WINDOW)) {
+            // Wait: hold at the top position before swinging in.
+            return BAT_BACKSWING_PEAK
+        }
+        if (distance in -BAT_STRIKE_WINDOW..0f) {
+            // Fast strike: accelerate hard from the top position the rest of the way into the ball.
+            val strike = 1f + (distance / BAT_STRIKE_WINDOW) // 0 at the top position, 1 at the strike
+            val eased = strike * strike // ease-in: gentle start, hardest acceleration right at the ball
+            return BAT_BACKSWING_PEAK + (1f - BAT_BACKSWING_PEAK) * eased
+        }
+        if (distance in 0f..BAT_RECOVERY_WINDOW) {
+            val normalizedDistance = 1f - (distance / BAT_RECOVERY_WINDOW)
+            return sin(normalizedDistance * (PI.toFloat() / 2f))
+        }
+        return 0f
     }
 }
