@@ -47,6 +47,10 @@ private const val BAT_PIVOT_Y_RATIO = 0.85f
 // A bat also moves forward as it swings, not just rotates: pulled back at rest and further still at the
 // peak of the backswing, arriving exactly at the ball at the moment of the strike. As a share of its width.
 private const val BAT_FORWARD_TRAVEL_RATIO = 0.16f
+// Bats sit this much further out, towards their screen edge, than where the ball actually is — so the ball
+// meets each bat nearer the middle of its head instead of right at the edge. The ball's own path is
+// unaffected; only where the bats are drawn shifts.
+private const val BAT_EDGE_OFFSET_DP = 20f
 
 /**
  * Drives the match-mode serve/rally animation: the GL ball ([RallyBallRenderer]) and the two
@@ -217,10 +221,20 @@ class RallyAnimationController(
         val leftHitCenterX = leftBallX + (ballWidth / 2f)
         val rightHitCenterX = rightBallX + (ballWidth / 2f)
         val hitCenterY = baseY + (ballHeight / 2f)
+        val edgeOffset = BAT_EDGE_OFFSET_DP * density
 
-        val leftContact = BatContact(leftHitCenterX, hitCenterY, BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE, forwardSign = 1f)
-        val rightContact =
-            BatContact(rightHitCenterX, hitCenterY, -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE), forwardSign = -1f)
+        val leftContact = BatContact(
+            leftHitCenterX - edgeOffset,
+            hitCenterY,
+            BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE,
+            forwardSign = 1f,
+        )
+        val rightContact = BatContact(
+            rightHitCenterX + edgeOffset,
+            hitCenterY,
+            -(BAT_IDLE_SWING_ANGLE - BAT_SWING_ANGLE),
+            forwardSign = -1f,
+        )
         this.leftContact = leftContact
         this.rightContact = rightContact
         placeBat(binding.ivBatLeft, leftContact, heightOffset = 0f, swingValue = 0f)
