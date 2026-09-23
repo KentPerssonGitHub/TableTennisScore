@@ -51,6 +51,9 @@ private const val BAT_FORWARD_TRAVEL_RATIO = 0.16f
 // meets each bat nearer the middle of its head instead of right at the edge. The ball's own path is
 // unaffected; only where the bats are drawn shifts.
 private const val BAT_EDGE_OFFSET_DP = 20f
+// Bats are also drawn this much higher than where the ball actually is. Like the edge offset, this only
+// shifts where the bats are drawn; the ball's own path is unaffected.
+private const val BAT_RAISE_DP = 10f
 
 /**
  * Drives the match-mode serve/rally animation: the GL ball ([RallyBallRenderer]) and the two
@@ -220,7 +223,7 @@ class RallyAnimationController(
     ) {
         val leftHitCenterX = leftBallX + (ballWidth / 2f)
         val rightHitCenterX = rightBallX + (ballWidth / 2f)
-        val hitCenterY = baseY + (ballHeight / 2f)
+        val hitCenterY = baseY + (ballHeight / 2f) - (BAT_RAISE_DP * density)
         val edgeOffset = BAT_EDGE_OFFSET_DP * density
 
         val leftContact = BatContact(

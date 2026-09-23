@@ -107,8 +107,8 @@ class RallyYPath(
         const val MIX_MULTIPLIER = 0x45d9f3b
 
         /** A leg plays this much faster to this much slower than the normal pace. */
-        const val LEG_SPEED_MIN = 0.85f
-        const val LEG_SPEED_MAX = 1.15f
+        const val LEG_SPEED_MIN = 0.65f
+        const val LEG_SPEED_MAX = 0.9f
 
         /** Keeps leg-speed randomness independent of the Y-offset randomness, which uses the default salt. */
         const val LEG_SPEED_SALT = 0x2545f491
