@@ -2,22 +2,20 @@ package com.example.tabletennisscore.animation
 import com.example.tabletennisscore.R
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.opengl.GLES20
-import android.opengl.GLSurfaceView
-import android.opengl.GLUtils
-import android.opengl.Matrix
-import android.os.SystemClock
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.FloatBuffer
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.RectF
+import android.view.animation.AnimationUtils
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 private const val DEFAULT_PEAK_AMPLITUDE_AT_EDGES = 0.45f
@@ -44,73 +42,29 @@ private const val SHADOW_SCALE_AT_PEAK = 0.9f
 private const val SHADOW_FLATTEN_RATIO = 0.5f
 /** How far below the ball's center the shadow sits, as a share of the ball's height (its bottom edge). */
 private const val SHADOW_DROP_RATIO = 0.4f
+/** The shadow is solid out to this share of its radius, then fades out smoothly to its edge. */
+private const val SHADOW_SOLID_RATIO = 0.55f
+private const val SHADOW_BITMAP_SIZE = 64
 
-class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
+/**
+ * Works out where the rally ball is at a given moment and draws it (and its shadow on the table) onto a
+ * [Canvas]. Drawn by [RallyBallView] on the main thread, in the same frame as the bats and with the same
+ * frame time ([AnimationUtils.currentAnimationTimeMillis]), so the ball moves smoothly, one step per screen
+ * refresh, and always in step with the bats.
+ */
+class RallyBallRenderer(context: Context) {
 
-    private val vertexShaderCode = """
-        uniform mat4 uMVPMatrix;
-        attribute vec4 vPosition;
-        attribute vec2 vTexCoord;
-        varying vec2 vfTexCoord;
-        void main() {
-            gl_Position = uMVPMatrix * vPosition;
-            vfTexCoord = vTexCoord;
-        }
-    """.trimIndent()
-
-    private val fragmentShaderCode = """
-        precision mediump float;
-        uniform sampler2D uTexture;
-        varying vec2 vfTexCoord;
-        void main() {
-            gl_FragColor = texture2D(uTexture, vfTexCoord);
-        }
-    """.trimIndent()
-
-    private val shadowFragmentShaderCode = """
-        precision mediump float;
-        uniform float uAlpha;
-        varying vec2 vfTexCoord;
-        void main() {
-            float d = length(vfTexCoord - vec2(0.5)) * 2.0;
-            gl_FragColor = vec4(0.0, 0.0, 0.0, uAlpha * (1.0 - smoothstep(0.55, 1.0, d)));
-        }
-    """.trimIndent()
-
-    private var program: Int = 0
-    private var shadowProgram: Int = 0
-    private var vPositionHandle: Int = 0
-    private var vTexCoordHandle: Int = 0
-    private var uMVPMatrixHandle: Int = 0
-    private var uTextureHandle: Int = 0
-
-    private val vpc = 3
-    private val quadCoords = floatArrayOf(
-        -0.5f,  0.5f, 0.0f, // top left
-        -0.5f, -0.5f, 0.0f, // bottom left
-         0.5f, -0.5f, 0.0f, // bottom right
-         0.5f,  0.5f, 0.0f  // top right
-    )
-    private val texCoords = floatArrayOf(
-        0.0f, 0.0f,
-        0.0f, 1.0f,
-        1.0f, 1.0f,
-        1.0f, 0.0f
-    )
-    private val drawOrder = shortArrayOf(0, 1, 2, 0, 2, 3)
-
-    private lateinit var vertexBuffer: FloatBuffer
-    private lateinit var texBuffer: FloatBuffer
-    private lateinit var drawListBuffer: java.nio.ShortBuffer
-
-    private val pMatrix = FloatArray(16)
-    private val mvpMatrix = FloatArray(16)
-    private val mMatrix = FloatArray(16)
-
-    private var textureId: Int = 0
+    /** Asks the view to draw a new frame; set by [RallyBallView]. */
+    internal var requestFrame: () -> Unit = {}
 
     // Animation parameters
-    @Volatile var isAnimating = false
+    /** Starting this draws frames again; stopping it redraws once more, so the ball disappears. */
+    var isAnimating = false
+        set(value) {
+            if (field == value) return
+            field = value
+            requestFrame()
+        }
     var leftX = 0f
     var rightX = 0f
     var baseY = 0f
@@ -138,22 +92,24 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
      * How far, in pixels, the ball's destination may drift above the middle line on each return
      * (0 = always straight along the middle). Only used when [enableServeThenRallyBounce] is on.
      */
-    @Volatile var returnYUpSpread = 0f
+    var returnYUpSpread = 0f
 
     /** Like [returnYUpSpread], but how far the destination may drift below the middle line. */
-    @Volatile var returnYDownSpread = 0f
+    var returnYDownSpread = 0f
 
     /**
      * Left and right edges of the table, in pixels. When both are set, the ball casts a shadow on the
      * table while it is over it; when either is null (e.g. the splash screen, which has no table) no
      * shadow is drawn.
      */
-    @Volatile var shadowTableLeft: Float? = null
-    @Volatile var shadowTableRight: Float? = null
+    var shadowTableLeft: Float? = null
+    var shadowTableRight: Float? = null
 
     private var startTime = 0L
-    @Volatile private var pathSeed = Random.nextInt()
-    private val duration = 1800L
+    private var pathSeed = Random.nextInt()
+    // TEST ONLY: slow motion. Everything (ball, spin, bats) follows this leg duration. Set back to 1 when done.
+    private val slowMotionFactor = 1L
+    private val duration = 1800L * slowMotionFactor
     val fullCycleDurationMillis: Long
         get() = duration * 2
 
@@ -161,13 +117,27 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
     val yPath: RallyYPath
         get() = RallyYPath(pathSeed, returnYUpSpread, returnYDownSpread)
 
-    /** The current leg number plus how far (0..1) the ball is through it; 0 before the first frame. */
+    /**
+     * The current leg number plus how far (0..1) the ball is through it, at this frame's time; 0 before
+     * the first frame.
+     */
     val legPosition: Float
         get() {
             val started = startTime
             if (started == 0L) return 0f
-            return yPath.legPositionAt(SystemClock.uptimeMillis() - started, duration)
+            return yPath.legPositionAt(AnimationUtils.currentAnimationTimeMillis() - started, duration)
         }
+
+    private val ballBitmap: Bitmap = BitmapFactory.decodeResource(
+        context.resources,
+        R.drawable.stigaperform40size128,
+        BitmapFactory.Options().apply { inScaled = false },
+    )
+    private val shadowBitmap = createShadowBitmap()
+    private val ballPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val shadowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val ballMatrix = Matrix()
+    private val shadowRect = RectF()
 
     fun resetAnimationPhase() {
         startTime = 0L
@@ -183,71 +153,11 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         rallyBouncePositionRatio = SERVE_RALLY_BOUNCE_POSITION_RATIO
     }
 
-    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        GLES20.glClearColor(0f, 0f, 0f, 0f)
-        
-        val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
-        val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
-
-        program = GLES20.glCreateProgram().also {
-            GLES20.glAttachShader(it, vertexShader)
-            GLES20.glAttachShader(it, fragmentShader)
-            GLES20.glLinkProgram(it)
-        }
-
-        val shadowFragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, shadowFragmentShaderCode)
-        shadowProgram = GLES20.glCreateProgram().also {
-            GLES20.glAttachShader(it, vertexShader)
-            GLES20.glAttachShader(it, shadowFragmentShader)
-            GLES20.glLinkProgram(it)
-        }
-
-        vertexBuffer = ByteBuffer.allocateDirect(quadCoords.size * 4).run {
-            order(ByteOrder.nativeOrder())
-            asFloatBuffer().apply {
-                put(quadCoords)
-                position(0)
-            }
-        }
-
-        texBuffer = ByteBuffer.allocateDirect(texCoords.size * 4).run {
-            order(ByteOrder.nativeOrder())
-            asFloatBuffer().apply {
-                put(texCoords)
-                position(0)
-            }
-        }
-
-        drawListBuffer = ByteBuffer.allocateDirect(drawOrder.size * 2).run {
-            order(ByteOrder.nativeOrder())
-            asShortBuffer().apply {
-                put(drawOrder)
-                position(0)
-            }
-        }
-
-        textureId = loadTexture(context, R.drawable.stigaperform40size128)
-
-        GLES20.glEnable(GLES20.GL_BLEND)
-        // The view blends the result onto the screen as premultiplied alpha, so build the alpha channel
-        // the same way (ONE, not SRC_ALPHA): otherwise see-through parts, like the shadow, come out too faint.
-        GLES20.glBlendFuncSeparate(
-            GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA,
-            GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
-        )
-    }
-
-    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-        GLES20.glViewport(0, 0, width, height)
-        Matrix.orthoM(pMatrix, 0, 0f, width.toFloat(), height.toFloat(), 0f, -1f, 1f)
-    }
-
-    override fun onDrawFrame(gl: GL10?) {
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-
+    /** Draws the ball as it is at [frameTimeMillis]. Does nothing while not [isAnimating]. */
+    fun draw(canvas: Canvas, frameTimeMillis: Long) {
         if (!isAnimating) return
 
-        if (startTime == 0L) startTime = SystemClock.uptimeMillis()
+        if (startTime == 0L) startTime = frameTimeMillis
 
         val currentX: Float
         val currentY: Float
@@ -258,7 +168,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (!enableServeThenRallyBounce) {
             // Legacy behavior (used by the splash screen): every leg repeats the exact same
             // double-bounce serve profile, unchanged from the original implementation.
-            val elapsed = (SystemClock.uptimeMillis() - startTime) % (duration * 2)
+            val elapsed = (frameTimeMillis - startTime) % (duration * 2)
 
             val tRaw = elapsed.toFloat() / duration
             val t = if (tRaw > 1f) 2f - tRaw else tRaw
@@ -279,7 +189,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
             // right after leaving the hitter's side, a smooth arc over the net, then a single
             // bounce deep on the far side before rising again to the other player, looping
             // indefinitely while alternating direction each leg.
-            val totalElapsed = SystemClock.uptimeMillis() - startTime
+            val totalElapsed = frameTimeMillis - startTime
             val path = yPath
             val legPositionNow = path.legPositionAt(totalElapsed, duration)
             val legIndex = floor(legPositionNow).toLong()
@@ -311,44 +221,27 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 baseY - (arcHeight * peakAmplitudeAtEdges * heightFactor)
             }
 
-            val spinDirection = if (forwardLeg) 1f else -1f
+            // A topspin hit (the one that starts this leg, see topspinAmount) sends the ball off rolling
+            // forwards; every other stroke, the serve included, sends it spinning the other way (backspin).
+            val travelDirection = if (forwardLeg) 1f else -1f
+            val topspinHit = topspinAmount(path.boundaryOffset(legIndex.toInt()), returnYUpSpread) > 0f
+            val spinDirection = if (topspinHit) travelDirection else -travelDirection
             rotation = pLocal * 360f * 3f * spinDirection
         }
 
-        drawShadow(currentX, currentY, tableY)
+        drawShadow(canvas, currentX, currentY, tableY)
 
-        GLES20.glUseProgram(program)
-
-        vPositionHandle = GLES20.glGetAttribLocation(program, "vPosition")
-        GLES20.glEnableVertexAttribArray(vPositionHandle)
-        GLES20.glVertexAttribPointer(vPositionHandle, vpc, GLES20.GL_FLOAT, false, 0, vertexBuffer)
-
-        vTexCoordHandle = GLES20.glGetAttribLocation(program, "vTexCoord")
-        GLES20.glEnableVertexAttribArray(vTexCoordHandle)
-        GLES20.glVertexAttribPointer(vTexCoordHandle, 2, GLES20.GL_FLOAT, false, 0, texBuffer)
-
-        uMVPMatrixHandle = GLES20.glGetUniformLocation(program, "uMVPMatrix")
-        
-        Matrix.setIdentityM(mMatrix, 0)
-        Matrix.translateM(mMatrix, 0, currentX + ballWidth / 2f, currentY + ballHeight / 2f, 0f)
-        Matrix.rotateM(mMatrix, 0, rotation, 0f, 0f, 1f)
-        Matrix.scaleM(mMatrix, 0, ballWidth, ballHeight, 1f)
-
-        Matrix.multiplyMM(mvpMatrix, 0, pMatrix, 0, mMatrix, 0)
-        GLES20.glUniformMatrix4fv(uMVPMatrixHandle, 1, false, mvpMatrix, 0)
-
-        uTextureHandle = GLES20.glGetUniformLocation(program, "uTexture")
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-        GLES20.glUniform1i(uTextureHandle, 0)
-
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, drawOrder.size, GLES20.GL_UNSIGNED_SHORT, drawListBuffer)
-
-        GLES20.glDisableVertexAttribArray(vPositionHandle)
-        GLES20.glDisableVertexAttribArray(vTexCoordHandle)
+        // The ball image, scaled to the ball's size and spun around its center. Flipped upside down, the
+        // way the earlier OpenGL version always showed it.
+        ballMatrix.reset()
+        ballMatrix.postScale(ballWidth / ballBitmap.width, -ballHeight / ballBitmap.height)
+        ballMatrix.postTranslate(-ballWidth / 2f, ballHeight / 2f)
+        ballMatrix.postRotate(rotation)
+        ballMatrix.postTranslate(currentX + ballWidth / 2f, currentY + ballHeight / 2f)
+        canvas.drawBitmap(ballBitmap, ballMatrix, ballPaint)
     }
 
-    private fun drawShadow(ballX: Float, ballY: Float, tableY: Float) {
+    private fun drawShadow(canvas: Canvas, ballX: Float, ballY: Float, tableY: Float) {
         val tableLeft = shadowTableLeft ?: return
         val tableRight = shadowTableRight ?: return
         val peakHeight = arcHeight * peakAmplitudeAtEdges
@@ -371,50 +264,26 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val alpha = (SHADOW_ALPHA_AT_TABLE + (SHADOW_ALPHA_AT_PEAK - SHADOW_ALPHA_AT_TABLE) * height) * onTable
         if (alpha <= 0f) return
 
-        GLES20.glUseProgram(shadowProgram)
-
-        val positionHandle = GLES20.glGetAttribLocation(shadowProgram, "vPosition")
-        GLES20.glEnableVertexAttribArray(positionHandle)
-        GLES20.glVertexAttribPointer(positionHandle, vpc, GLES20.GL_FLOAT, false, 0, vertexBuffer)
-
-        val texCoordHandle = GLES20.glGetAttribLocation(shadowProgram, "vTexCoord")
-        GLES20.glEnableVertexAttribArray(texCoordHandle)
-        GLES20.glVertexAttribPointer(texCoordHandle, 2, GLES20.GL_FLOAT, false, 0, texBuffer)
-
-        Matrix.setIdentityM(mMatrix, 0)
-        Matrix.translateM(mMatrix, 0, centerX, centerY, 0f)
-        Matrix.scaleM(mMatrix, 0, shadowWidth, shadowHeight, 1f)
-        Matrix.multiplyMM(mvpMatrix, 0, pMatrix, 0, mMatrix, 0)
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(shadowProgram, "uMVPMatrix"), 1, false, mvpMatrix, 0)
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(shadowProgram, "uAlpha"), alpha)
-
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, drawOrder.size, GLES20.GL_UNSIGNED_SHORT, drawListBuffer)
-
-        GLES20.glDisableVertexAttribArray(positionHandle)
-        GLES20.glDisableVertexAttribArray(texCoordHandle)
+        shadowPaint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
+        shadowRect.set(centerX - halfWidth, centerY - shadowHeight / 2f, centerX + halfWidth, centerY + shadowHeight / 2f)
+        canvas.drawBitmap(shadowBitmap, null, shadowRect, shadowPaint)
     }
 
-    private fun loadShader(type: Int, shaderCode: String): Int {
-        return GLES20.glCreateShader(type).also { shader ->
-            GLES20.glShaderSource(shader, shaderCode)
-            GLES20.glCompileShader(shader)
+    /** A soft black disc: solid in the middle, fading smoothly to nothing at its edge. */
+    private fun createShadowBitmap(): Bitmap {
+        val size = SHADOW_BITMAP_SIZE
+        val pixels = IntArray(size * size)
+        val center = (size - 1) / 2f
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val dx = (x - center) / center
+                val dy = (y - center) / center
+                val distance = sqrt(dx * dx + dy * dy)
+                val fade = ((distance - SHADOW_SOLID_RATIO) / (1f - SHADOW_SOLID_RATIO)).coerceIn(0f, 1f)
+                val smooth = fade * fade * (3f - 2f * fade)
+                pixels[y * size + x] = Color.argb(((1f - smooth) * 255f).toInt(), 0, 0, 0)
+            }
         }
-    }
-
-    private fun loadTexture(context: Context, resourceId: Int): Int {
-        val textureHandle = IntArray(1)
-        GLES20.glGenTextures(1, textureHandle, 0)
-
-        if (textureHandle[0] != 0) {
-            val options = BitmapFactory.Options().apply { inScaled = false }
-            val bitmap = BitmapFactory.decodeResource(context.resources, resourceId, options)
-
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0])
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST)
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST)
-            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
-            bitmap.recycle()
-        }
-        return textureHandle[0]
+        return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
     }
 }

@@ -22,7 +22,7 @@
         android:gravity="center"
         android:orientation="horizontal" />
 
-    <com.example.tabletennisscore.animation.RallyBallGLView
+    <com.example.tabletennisscore.animation.RallyBallView
         android:id="@+id/glSplashBall"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

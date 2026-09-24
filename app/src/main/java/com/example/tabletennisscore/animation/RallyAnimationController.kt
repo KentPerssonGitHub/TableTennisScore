@@ -88,7 +88,7 @@ private const val TOPSPIN_BACKSWING_WINDOW = -0.12f
 private const val TOPSPIN_PAUSE_WINDOW = 0.04f
 
 /**
- * Drives the match-mode serve/rally animation: the GL ball ([RallyBallRenderer]) and the two
+ * Drives the match-mode serve/rally animation: the ball ([RallyBallView]) and the two
  * bat ImageViews swinging in sync with it. The animation restarts whenever the score changes.
  */
 class RallyAnimationController(

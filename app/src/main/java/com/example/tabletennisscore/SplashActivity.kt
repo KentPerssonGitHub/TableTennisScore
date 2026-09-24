@@ -1,5 +1,5 @@
 package com.example.tabletennisscore
-import com.example.tabletennisscore.animation.RallyBallGLView
+import com.example.tabletennisscore.animation.RallyBallView
 
 import android.animation.ValueAnimator
 import android.content.Intent
@@ -55,12 +55,12 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        findViewById<RallyBallGLView>(R.id.glSplashBall).onResume()
+        findViewById<RallyBallView>(R.id.glSplashBall).onResume()
     }
 
     override fun onPause() {
         super.onPause()
-        findViewById<RallyBallGLView>(R.id.glSplashBall).onPause()
+        findViewById<RallyBallView>(R.id.glSplashBall).onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -133,14 +133,14 @@ class SplashActivity : AppCompatActivity() {
 
     private fun startSplashBallAnimationWhenReady() {
         val rootView = findViewById<View>(R.id.splashRoot)
-        val glView = findViewById<RallyBallGLView>(R.id.glSplashBall)
+        val ballView = findViewById<RallyBallView>(R.id.glSplashBall)
         rootView.post {
             if (isFinishing || isDestroyed) return@post
-            startSplashBallAnimation(rootView, glView)
+            startSplashBallAnimation(rootView, ballView)
         }
     }
 
-    private fun startSplashBallAnimation(rootView: View, glView: RallyBallGLView) {
+    private fun startSplashBallAnimation(rootView: View, ballView: RallyBallView) {
         val ballSize = 20 * resources.displayMetrics.density
         val rootWidth = rootView.width.toFloat()
         val rootHeight = rootView.height.toFloat()
@@ -156,7 +156,7 @@ class SplashActivity : AppCompatActivity() {
         val desiredArc = abs(horizontalTravel) * 0.20f
         val arcHeight = maxOf(70f, minOf(220f, desiredArc))
 
-        glView.renderer.apply {
+        ballView.renderer.apply {
             this.leftX = leftX
             this.rightX = rightX
             this.baseY = baseY
