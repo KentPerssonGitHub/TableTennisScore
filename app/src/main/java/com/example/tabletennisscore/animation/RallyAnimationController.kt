@@ -154,6 +154,8 @@ class RallyAnimationController(
                 useServeThenRallyStyle()
                 this.returnYUpSpread = tableHeight * RETURN_Y_UP_SPREAD_RATIO
                 this.returnYDownSpread = tableHeight * RETURN_Y_DOWN_SPREAD_RATIO
+                this.shadowTableLeft = tableLeft
+                this.shadowTableRight = tableLeft + tableWidth
                 this.isAnimating = true
             }
 

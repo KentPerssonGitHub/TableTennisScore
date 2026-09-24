@@ -34,6 +34,17 @@ private const val SERVE_RALLY_PEAK_AMPLITUDE_AT_CENTER = 0.82f
 private const val SERVE_RALLY_EDGE_DOWN_OFFSET_RATIO = 0f
 private const val SERVE_RALLY_BOUNCE_POSITION_RATIO = 0.68f
 
+// The ball's shadow on the table: darkest and widest when the ball touches the table, smaller and
+// fainter the higher the ball flies, so the height over the table is easy to read.
+private const val SHADOW_ALPHA_AT_TABLE = 0.75f
+private const val SHADOW_ALPHA_AT_PEAK = 0.4f
+private const val SHADOW_SCALE_AT_TABLE = 1.3f
+private const val SHADOW_SCALE_AT_PEAK = 0.9f
+/** The table is seen at an angle, so the round shadow is squashed to this share of its width. */
+private const val SHADOW_FLATTEN_RATIO = 0.5f
+/** How far below the ball's center the shadow sits, as a share of the ball's height (its bottom edge). */
+private const val SHADOW_DROP_RATIO = 0.4f
+
 class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private val vertexShaderCode = """
@@ -56,7 +67,18 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     """.trimIndent()
 
+    private val shadowFragmentShaderCode = """
+        precision mediump float;
+        uniform float uAlpha;
+        varying vec2 vfTexCoord;
+        void main() {
+            float d = length(vfTexCoord - vec2(0.5)) * 2.0;
+            gl_FragColor = vec4(0.0, 0.0, 0.0, uAlpha * (1.0 - smoothstep(0.55, 1.0, d)));
+        }
+    """.trimIndent()
+
     private var program: Int = 0
+    private var shadowProgram: Int = 0
     private var vPositionHandle: Int = 0
     private var vTexCoordHandle: Int = 0
     private var uMVPMatrixHandle: Int = 0
@@ -121,6 +143,14 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
     /** Like [returnYUpSpread], but how far the destination may drift below the middle line. */
     @Volatile var returnYDownSpread = 0f
 
+    /**
+     * Left and right edges of the table, in pixels. When both are set, the ball casts a shadow on the
+     * table while it is over it; when either is null (e.g. the splash screen, which has no table) no
+     * shadow is drawn.
+     */
+    @Volatile var shadowTableLeft: Float? = null
+    @Volatile var shadowTableRight: Float? = null
+
     private var startTime = 0L
     @Volatile private var pathSeed = Random.nextInt()
     private val duration = 1800L
@@ -162,6 +192,13 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         program = GLES20.glCreateProgram().also {
             GLES20.glAttachShader(it, vertexShader)
             GLES20.glAttachShader(it, fragmentShader)
+            GLES20.glLinkProgram(it)
+        }
+
+        val shadowFragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, shadowFragmentShaderCode)
+        shadowProgram = GLES20.glCreateProgram().also {
+            GLES20.glAttachShader(it, vertexShader)
+            GLES20.glAttachShader(it, shadowFragmentShader)
             GLES20.glLinkProgram(it)
         }
 
@@ -210,6 +247,8 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val currentX: Float
         val currentY: Float
         val rotation: Float
+        // The ball's Y (same top-left convention as currentY) when it rests on the table right below it.
+        val tableY: Float
 
         if (!enableServeThenRallyBounce) {
             // Legacy behavior (used by the splash screen): every leg repeats the exact same
@@ -220,6 +259,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
             val t = if (tRaw > 1f) 2f - tRaw else tRaw
 
             currentX = leftX + (rightX - leftX) * t
+            tableY = baseY
             val bounceWave = abs(sin((2f * PI.toFloat() * t) - (PI.toFloat() / 2f)))
             val edgeFactor = abs((2f * t) - 1f)
             val amplitude = peakAmplitudeAtCenter + (peakAmplitudeAtEdges - peakAmplitudeAtCenter) * edgeFactor
@@ -248,6 +288,7 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
             }
 
             val returnYOffset = path.ballOffset(legPositionNow)
+            tableY = baseY + returnYOffset
 
             currentY = returnYOffset + if (legIndex == 0L) {
                 val bounceWave = abs(sin((2f * PI.toFloat() * pLocal) - (PI.toFloat() / 2f)))
@@ -268,6 +309,8 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
             val spinDirection = if (forwardLeg) 1f else -1f
             rotation = pLocal * 360f * 3f * spinDirection
         }
+
+        drawShadow(currentX, currentY, tableY)
 
         GLES20.glUseProgram(program)
 
@@ -298,6 +341,52 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
         GLES20.glDisableVertexAttribArray(vPositionHandle)
         GLES20.glDisableVertexAttribArray(vTexCoordHandle)
+    }
+
+    private fun drawShadow(ballX: Float, ballY: Float, tableY: Float) {
+        val tableLeft = shadowTableLeft ?: return
+        val tableRight = shadowTableRight ?: return
+        val peakHeight = arcHeight * peakAmplitudeAtEdges
+        if (peakHeight <= 0f) return
+
+        // 0 when the ball touches the table, 1 at the top of its arc.
+        val height = ((tableY - ballY) / peakHeight).coerceIn(0f, 1f)
+        val scale = SHADOW_SCALE_AT_TABLE + (SHADOW_SCALE_AT_PEAK - SHADOW_SCALE_AT_TABLE) * height
+        val shadowWidth = ballWidth * scale
+        val shadowHeight = ballHeight * scale * SHADOW_FLATTEN_RATIO
+        val centerX = ballX + ballWidth / 2f
+        val centerY = tableY + ballHeight / 2f + ballHeight * SHADOW_DROP_RATIO
+
+        // The shadow only falls on the table: fade it out as it slides off either end.
+        val halfWidth = shadowWidth / 2f
+        val onTable = minOf(
+            (centerX - tableLeft + halfWidth) / shadowWidth,
+            (tableRight - centerX + halfWidth) / shadowWidth,
+        ).coerceIn(0f, 1f)
+        val alpha = (SHADOW_ALPHA_AT_TABLE + (SHADOW_ALPHA_AT_PEAK - SHADOW_ALPHA_AT_TABLE) * height) * onTable
+        if (alpha <= 0f) return
+
+        GLES20.glUseProgram(shadowProgram)
+
+        val positionHandle = GLES20.glGetAttribLocation(shadowProgram, "vPosition")
+        GLES20.glEnableVertexAttribArray(positionHandle)
+        GLES20.glVertexAttribPointer(positionHandle, vpc, GLES20.GL_FLOAT, false, 0, vertexBuffer)
+
+        val texCoordHandle = GLES20.glGetAttribLocation(shadowProgram, "vTexCoord")
+        GLES20.glEnableVertexAttribArray(texCoordHandle)
+        GLES20.glVertexAttribPointer(texCoordHandle, 2, GLES20.GL_FLOAT, false, 0, texBuffer)
+
+        Matrix.setIdentityM(mMatrix, 0)
+        Matrix.translateM(mMatrix, 0, centerX, centerY, 0f)
+        Matrix.scaleM(mMatrix, 0, shadowWidth, shadowHeight, 1f)
+        Matrix.multiplyMM(mvpMatrix, 0, pMatrix, 0, mMatrix, 0)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(shadowProgram, "uMVPMatrix"), 1, false, mvpMatrix, 0)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(shadowProgram, "uAlpha"), alpha)
+
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, drawOrder.size, GLES20.GL_UNSIGNED_SHORT, drawListBuffer)
+
+        GLES20.glDisableVertexAttribArray(positionHandle)
+        GLES20.glDisableVertexAttribArray(texCoordHandle)
     }
 
     private fun loadShader(type: Int, shaderCode: String): Int {
