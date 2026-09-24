@@ -19,8 +19,26 @@ class RallyYPath(
     private val downSpread: Float = upSpread,
 ) {
 
-    /** Vertical offset of the ball at the hit that ends leg `boundary - 1` and starts leg `boundary`. */
+    /**
+     * Vertical offset of the ball at the hit that ends leg `boundary - 1` and starts leg `boundary`.
+     *
+     * A bat never goes straight from a backhand stroke to a topspin one: when its previous hit (two
+     * boundaries back) was backhand, this hit is kept low enough on the table not to be topspin.
+     */
     fun boundaryOffset(boundary: Int): Float {
+        val offset = randomOffset(boundary)
+        if (offset < 0f && isBackhandHeight(randomOffset(boundary - LEGS_BETWEEN_STRIKES), downSpread)) {
+            return offset * TOPSPIN_START_RATIO
+        }
+        return offset
+    }
+
+    /**
+     * The random hit height at [boundary], before [boundaryOffset]'s backhand-to-topspin rule. That rule
+     * only lowers hits up the table, never makes one backhand, so a hit is backhand here exactly when it is
+     * in [boundaryOffset] too.
+     */
+    private fun randomOffset(boundary: Int): Float {
         if (boundary <= FIRST_RANDOM_BOUNDARY - 1) return 0f
         val random = unitRandom(boundary) * 2f - 1f // -1 (highest) .. +1 (lowest)
         return if (random < 0f) random * upSpread else random * downSpread
@@ -54,6 +72,23 @@ class RallyYPath(
         val from = boundaryOffset(previousStrike)
         val to = boundaryOffset(previousStrike + LEGS_BETWEEN_STRIKES)
         return from + (to - from) * eased
+    }
+
+    /**
+     * Vertical offset of the hit a bat is busy with at [legPosition]: the one it is winding up for, or the
+     * one it just played while it follows through. It switches halfway between two of the bat's hits, while
+     * the bat is resting, so a whole stroke (windup, strike, follow-through) belongs to the same hit.
+     */
+    fun strikeOffset(strikesOnEvenBoundaries: Boolean, legPosition: Float): Float {
+        val parity = if (strikesOnEvenBoundaries) 0 else 1
+        var previousStrike = floor(legPosition).toInt()
+        if (Math.floorMod(previousStrike, 2) != parity) previousStrike -= 1
+        val nearestStrike = if (legPosition - previousStrike > LEGS_BETWEEN_STRIKES / 2f) {
+            previousStrike + LEGS_BETWEEN_STRIKES
+        } else {
+            previousStrike
+        }
+        return boundaryOffset(nearestStrike)
     }
 
     /**
@@ -127,4 +162,22 @@ private const val BACKHAND_DEPTH_RATIO = 0.7f
  */
 fun isBackhandHeight(offset: Float, downSpread: Float): Boolean {
     return downSpread > 0f && offset > downSpread * BACKHAND_DEPTH_RATIO
+}
+
+/** Hits higher up than this share of the upward range, measured from the middle line, start to get topspin. */
+private const val TOPSPIN_START_RATIO = 0.25f
+
+/** Hits at least this high up, as a share of the upward range, are played with a full topspin stroke. */
+private const val TOPSPIN_FULL_RATIO = 0.6f
+
+/**
+ * How much of a topspin stroke a bat plays for a hit at vertical [offset] (pixels, positive is down): 0 for a
+ * normal stroke, rising smoothly to 1 for a full topspin stroke high up the table. [upSpread] is the highest a
+ * return can reach above the middle line.
+ */
+fun topspinAmount(offset: Float, upSpread: Float): Float {
+    if (upSpread <= 0f) return 0f
+    val height = -offset / upSpread
+    val amount = ((height - TOPSPIN_START_RATIO) / (TOPSPIN_FULL_RATIO - TOPSPIN_START_RATIO)).coerceIn(0f, 1f)
+    return amount * amount * (3f - 2f * amount)
 }

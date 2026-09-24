@@ -54,6 +54,38 @@ private const val BAT_EDGE_OFFSET_DP = 20f
 // Bats are also drawn this much higher than where the ball actually is. Like the edge offset, this only
 // shifts where the bats are drawn; the ball's own path is unaffected.
 private const val BAT_RAISE_DP = 10f
+// High up the table a bat plays topspin (see topspinAmount): it winds up much further back and low, below
+// the ball, drives forward and up through it, and follows through over the top of the ball. "Low" and "over"
+// are height above the table, towards the viewer looking down on it, so they show as the bat drawn smaller
+// or bigger, not as moving up or down the screen. Distances are shares of the bat's width.
+/** How far back, away from the table, the bat pulls at the top of a topspin windup. */
+private const val TOPSPIN_BACK_RATIO = 0.9f
+/** At the top of a topspin windup the bat is lowered below the ball: drawn this much smaller. */
+private const val TOPSPIN_WINDUP_SINK = 0.12f
+/** After the hit, how far the bat keeps going forward, towards the table, over the ball. */
+private const val TOPSPIN_FOLLOW_FORWARD_RATIO = 0.35f
+/** After the hit the bat lifts up over the ball, towards the viewer: drawn at most this much bigger. */
+private const val TOPSPIN_FOLLOW_LIFT = 0.3f
+/**
+ * While a bat is lifted over the ball it is raised above the ball's view (which has none) so it covers the
+ * ball; kept below the tap areas (2dp) so they still get every tap.
+ */
+private const val BAT_OVER_BALL_Z_DP = 1f
+/** A topspin swing's windup top position, as a share of BAT_SWING_ANGLE (replaces BAT_BACKSWING_PEAK). */
+private const val TOPSPIN_BACKSWING_PEAK = 0.9f
+/** A topspin swing follows through for longer than the normal BAT_RECOVERY_WINDOW. */
+private const val TOPSPIN_FOLLOW_THROUGH_WINDOW = 0.2f
+/**
+ * At the top of a topspin windup the bat's head is tilted this many degrees further back, so that it leans
+ * away from the table, towards its own end of the screen, instead of towards the table like a normal windup.
+ */
+private const val TOPSPIN_WINDUP_LEAN_ANGLE = 45f
+/**
+ * A topspin windup starts later than a normal one (BAT_BACKSWING_WINDOW) and holds its top position for a
+ * shorter time (instead of BAT_PAUSE_WINDOW), so the bat only gets ready shortly before the ball arrives.
+ */
+private const val TOPSPIN_BACKSWING_WINDOW = -0.12f
+private const val TOPSPIN_PAUSE_WINDOW = 0.04f
 
 /**
  * Drives the match-mode serve/rally animation: the GL ball ([RallyBallRenderer]) and the two
@@ -74,6 +106,14 @@ class RallyAnimationController(
      */
     private class BatContact(val x: Float, val y: Float, val strikeRotation: Float, val forwardSign: Float)
 
+    /**
+     * Where a bat is in its stroke: [swing] as a fraction of [BAT_SWING_ANGLE] (see [swingPose]), plus the
+     * extra topspin motion: [back] pixels away from the table (negative is towards it) and [lift], the height
+     * above the ball as a share of the bat's size (negative is below it), which shows as the bat drawn bigger,
+     * and [lean], degrees the head tilts back, away from the table.
+     */
+    private class SwingPose(val swing: Float, val back: Float = 0f, val lift: Float = 0f, val lean: Float = 0f)
+
     private var leftContact: BatContact? = null
     private var rightContact: BatContact? = null
 
@@ -93,8 +133,8 @@ class RallyAnimationController(
         rightFlipper.reset()
         binding.ivBatLeft.rotation = BAT_IDLE_SWING_ANGLE
         binding.ivBatRight.rotation = -BAT_IDLE_SWING_ANGLE
-        leftContact?.let { placeBat(binding.ivBatLeft, it, heightOffset = 0f, swingValue = 0f) }
-        rightContact?.let { placeBat(binding.ivBatRight, it, heightOffset = 0f, swingValue = 0f) }
+        leftContact?.let { placeBat(binding.ivBatLeft, leftFlipper, it, heightOffset = 0f, SwingPose(0f)) }
+        rightContact?.let { placeBat(binding.ivBatRight, rightFlipper, it, heightOffset = 0f, SwingPose(0f)) }
     }
 
     fun startIfNeeded() {
@@ -242,8 +282,8 @@ class RallyAnimationController(
         )
         this.leftContact = leftContact
         this.rightContact = rightContact
-        placeBat(binding.ivBatLeft, leftContact, heightOffset = 0f, swingValue = 0f)
-        placeBat(binding.ivBatRight, rightContact, heightOffset = 0f, swingValue = 0f)
+        placeBat(binding.ivBatLeft, leftFlipper, leftContact, heightOffset = 0f, SwingPose(0f))
+        placeBat(binding.ivBatRight, rightFlipper, rightContact, heightOffset = 0f, SwingPose(0f))
 
         if (rallyBatAnimator == null) {
             resetBatAngles()
@@ -252,28 +292,34 @@ class RallyAnimationController(
 
     /**
      * Sets the position of [bat] so that its head is at [contact] (moved [heightOffset] pixels down) once
-     * [swingValue] reaches 1, the moment of the strike; at lower (or negative, backswing) values the bat
-     * also sits a little behind that point, so it visibly moves forward into the ball as it swings, not
-     * just rotates. Also accounts for the bat possibly being turned over: [View.getScaleY] is 1 with the
-     * handle down, -1 with the handle up, and passes through 0 while it flips.
+     * the [pose]'s swing reaches 1, the moment of the strike; at lower (or negative, backswing) values the
+     * bat also sits a little behind that point, so it visibly moves forward into the ball as it swings, not
+     * just rotates. The pose's topspin motion moves it further back or forward and lifts it (drawn bigger)
+     * around its head, so the head stays on the ball's line. Also accounts for the bat possibly being
+     * turned over: [BatFlipper.flip] is 1 with the handle down, -1 with the handle up, and passes through 0
+     * while it flips.
      */
-    private fun placeBat(bat: View, contact: BatContact, heightOffset: Float, swingValue: Float) {
-        val verticalSign = bat.scaleY
+    private fun placeBat(bat: View, flipper: BatFlipper, contact: BatContact, heightOffset: Float, pose: SwingPose) {
+        flipper.zoom = 1f + pose.lift
+        // Only a bat above the ball covers it; otherwise the ball, drawn later, stays in front.
+        bat.translationZ = if (pose.lift > 0f) BAT_OVER_BALL_Z_DP * density else 0f
+        val verticalSign = flipper.flip
+        val zoom = flipper.zoom
         val pivotX = bat.width * 0.5f
         val pivotY = bat.height * BAT_PIVOT_Y_RATIO
         val headCenterX = bat.width * 0.5f
         val headCenterY = bat.height * BAT_HEAD_CENTER_Y_RATIO
-        val dx = headCenterX - pivotX
-        val dy = (headCenterY - pivotY) * verticalSign
+        val dx = (headCenterX - pivotX) * zoom
+        val dy = (headCenterY - pivotY) * verticalSign * zoom
         // A turned-over bat is the mirror image of the normal one, so its swing angle is mirrored too.
         val radians = Math.toRadians((contact.strikeRotation * verticalSign).toDouble())
         val rotatedDx = (dx * cos(radians) - dy * sin(radians)).toFloat()
         val rotatedDy = (dx * sin(radians) + dy * cos(radians)).toFloat()
-        val forwardTravel = bat.width * BAT_FORWARD_TRAVEL_RATIO * (1f - swingValue) * contact.forwardSign
+        val backTravel = (bat.width * BAT_FORWARD_TRAVEL_RATIO * (1f - pose.swing) + pose.back) * contact.forwardSign
 
         bat.pivotX = pivotX
         bat.pivotY = pivotY
-        bat.x = contact.x - forwardTravel - pivotX - rotatedDx
+        bat.x = contact.x - backTravel - pivotX - rotatedDx
         bat.y = contact.y + heightOffset - pivotY - rotatedDy
     }
 
@@ -307,12 +353,17 @@ class RallyAnimationController(
 
         val leftStrikePoint = if (rallyStartsFromLeft) 0f else 0.5f
         val rightStrikePoint = if (rallyStartsFromLeft) 0.5f else 0f
-        val leftSwing = strikePulse(cycleProgress, leftStrikePoint)
-        val rightSwing = strikePulse(cycleProgress, rightStrikePoint)
-
         // Follow the ball's up/down drift so each bat is at the right height when it hits.
         val leftOffset = path.batOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition)
         val rightOffset = path.batOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition)
+
+        // High up the table a bat plays topspin. Judged by the hit the bat is busy with, not by where it is
+        // right now, so a stroke doesn't change style halfway while the bat glides into place.
+        val upSpread = renderer.returnYUpSpread
+        val leftTopspin = topspinAmount(path.strikeOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition), upSpread)
+        val rightTopspin = topspinAmount(path.strikeOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition), upSpread)
+        val leftPose = swingPose(cycleProgress, leftStrikePoint, leftTopspin, binding.ivBatLeft.width.toFloat())
+        val rightPose = swingPose(cycleProgress, rightStrikePoint, rightTopspin, binding.ivBatRight.width.toFloat())
 
         // Far down the table a bat plays the ball backhand: it turns over (handle up) and shows its other rubber.
         val downSpread = renderer.returnYDownSpread
@@ -320,44 +371,72 @@ class RallyAnimationController(
         rightFlipper.setBackhand(isBackhandHeight(rightOffset, downSpread))
 
         // A turned-over bat is the mirror image of the normal one, so it also swings the other way around.
-        binding.ivBatLeft.rotation = binding.ivBatLeft.scaleY * (BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftSwing))
-        binding.ivBatRight.rotation = binding.ivBatRight.scaleY * (-BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightSwing))
-        leftContact?.let { placeBat(binding.ivBatLeft, it, leftOffset, leftSwing) }
-        rightContact?.let { placeBat(binding.ivBatRight, it, rightOffset, rightSwing) }
+        binding.ivBatLeft.rotation = leftFlipper.flip *
+            (BAT_IDLE_SWING_ANGLE - (BAT_SWING_ANGLE * leftPose.swing) - leftPose.lean)
+        binding.ivBatRight.rotation = rightFlipper.flip *
+            (-BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightPose.swing) + rightPose.lean)
+        leftContact?.let { placeBat(binding.ivBatLeft, leftFlipper, it, leftOffset, leftPose) }
+        rightContact?.let { placeBat(binding.ivBatRight, rightFlipper, it, rightOffset, rightPose) }
     }
 
     /**
-     * How far a bat should swing at this point in its cycle, as a fraction of [BAT_SWING_ANGLE]: 0 at rest,
-     * rising to a partial "top" position (part-way towards the ball), holding there a moment, then a fast
-     * final snap the rest of the way up to +1, [BAT_SWING_DELAY] after the strike (swung fully into the
-     * ball). After the strike it eases back to rest.
+     * Where a bat is in its stroke at this point in its cycle. The swing is a fraction of [BAT_SWING_ANGLE]:
+     * 0 at rest, rising to a partial "top" position (part-way towards the ball), holding there a moment, then
+     * a fast final snap the rest of the way up to +1, [BAT_SWING_DELAY] after the strike (swung fully into
+     * the ball). After the strike it eases back to rest.
+     *
+     * With [topspin] (0..1) the windup starts later and the bat pulls far back and low, below the ball, its
+     * head tilted back away from the table; it drives forward and up into the ball during the strike, and
+     * after it keeps going forward and up over the top of the ball, before settling back to rest. [batWidth]
+     * scales the forward/back distances.
      */
-    private fun strikePulse(progress: Float, strikePoint: Float): Float {
+    private fun swingPose(progress: Float, strikePoint: Float, topspin: Float, batWidth: Float): SwingPose {
         var distance = progress - strikePoint - BAT_SWING_DELAY
         distance -= floor(distance + 0.5f) // wrap into (-0.5, 0.5]
 
-        val pauseStart = -(BAT_STRIKE_WINDOW + BAT_PAUSE_WINDOW)
-        if (distance in -BAT_BACKSWING_WINDOW..pauseStart) {
+        val backswingPeak = BAT_BACKSWING_PEAK + (TOPSPIN_BACKSWING_PEAK - BAT_BACKSWING_PEAK) * topspin
+        val windupBack = batWidth * TOPSPIN_BACK_RATIO * topspin
+        val windupLift = -TOPSPIN_WINDUP_SINK * topspin
+        val windupLean = TOPSPIN_WINDUP_LEAN_ANGLE * topspin
+        val backswingWindow = BAT_BACKSWING_WINDOW + (TOPSPIN_BACKSWING_WINDOW - BAT_BACKSWING_WINDOW) * topspin
+        val pauseWindow = BAT_PAUSE_WINDOW + (TOPSPIN_PAUSE_WINDOW - BAT_PAUSE_WINDOW) * topspin
+
+        val pauseStart = -(BAT_STRIKE_WINDOW + pauseWindow)
+        if (distance in -backswingWindow..pauseStart) {
             // Slow windup: ease from rest to the top position, well before the strike.
-            val windUpSpan = BAT_BACKSWING_WINDOW - BAT_STRIKE_WINDOW - BAT_PAUSE_WINDOW
-            val windUp = (distance + BAT_BACKSWING_WINDOW) / windUpSpan // 0 at the start, 1 at the top position
+            val windUpSpan = backswingWindow - BAT_STRIKE_WINDOW - pauseWindow
+            val windUp = (distance + backswingWindow) / windUpSpan // 0 at the start, 1 at the top position
             val eased = windUp * windUp * (3f - 2f * windUp) // smoothstep
-            return BAT_BACKSWING_PEAK * eased
+            return SwingPose(backswingPeak * eased, windupBack * eased, windupLift * eased, windupLean * eased)
         }
         if (distance in pauseStart..(-BAT_STRIKE_WINDOW)) {
             // Wait: hold at the top position before swinging in.
-            return BAT_BACKSWING_PEAK
+            return SwingPose(backswingPeak, windupBack, windupLift, windupLean)
         }
         if (distance in -BAT_STRIKE_WINDOW..0f) {
             // Fast strike: accelerate hard from the top position the rest of the way into the ball.
             val strike = 1f + (distance / BAT_STRIKE_WINDOW) // 0 at the top position, 1 at the strike
             val eased = strike * strike // ease-in: gentle start, hardest acceleration right at the ball
-            return BAT_BACKSWING_PEAK + (1f - BAT_BACKSWING_PEAK) * eased
+            val remaining = 1f - eased
+            return SwingPose(
+                backswingPeak + (1f - backswingPeak) * eased,
+                windupBack * remaining,
+                windupLift * remaining,
+                windupLean * remaining,
+            )
         }
-        if (distance in 0f..BAT_RECOVERY_WINDOW) {
-            val normalizedDistance = 1f - (distance / BAT_RECOVERY_WINDOW)
-            return sin(normalizedDistance * (PI.toFloat() / 2f))
+        val followThroughWindow = BAT_RECOVERY_WINDOW + (TOPSPIN_FOLLOW_THROUGH_WINDOW - BAT_RECOVERY_WINDOW) * topspin
+        if (distance in 0f..followThroughWindow) {
+            val followThrough = distance / followThroughWindow // 0 at the strike, 1 back at rest
+            val swing = sin((1f - followThrough) * (PI.toFloat() / 2f))
+            // Out and back again: furthest over the ball halfway through, at rest at both ends.
+            val over = sin(followThrough * PI.toFloat()) * topspin
+            return SwingPose(
+                swing,
+                back = -batWidth * TOPSPIN_FOLLOW_FORWARD_RATIO * over,
+                lift = TOPSPIN_FOLLOW_LIFT * over,
+            )
         }
-        return 0f
+        return SwingPose(0f)
     }
 }

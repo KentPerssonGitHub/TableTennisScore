@@ -305,6 +305,67 @@ class RallyYPathTest {
         assertTrue("backhand share was $backhandShare", backhandShare in 0.05..0.30)
     }
 
+    // ----- Topspin -----
+
+    @Test
+    fun aStrokeBelongsToTheHitItWindsUpForAndFollowsThroughFrom() {
+        val path = RallyYPath(7, spread)
+        // Even-boundary bat: hits at 2 and 4. Just before and after 4 it is busy with hit 4.
+        assertEquals(path.boundaryOffset(4), path.strikeOffset(true, 3.2f), delta)
+        assertEquals(path.boundaryOffset(4), path.strikeOffset(true, 4.8f), delta)
+        // Just after hit 2, still following through from it.
+        assertEquals(path.boundaryOffset(2), path.strikeOffset(true, 2.9f), delta)
+        // Odd-boundary bat: hits at 3 and 5.
+        assertEquals(path.boundaryOffset(5), path.strikeOffset(false, 4.1f), delta)
+        assertEquals(path.boundaryOffset(3), path.strikeOffset(false, 3.9f), delta)
+    }
+
+    @Test
+    fun aHitHighUpTheTableIsFullTopspin() {
+        assertEquals(1f, topspinAmount(offset = -40f, upSpread = 40f), delta)
+        assertEquals(1f, topspinAmount(offset = -24f, upSpread = 40f), delta)
+    }
+
+    @Test
+    fun aHitOnTheMiddleLineOrDownTheTableHasNoTopspin() {
+        assertEquals(0f, topspinAmount(offset = 0f, upSpread = 40f), delta)
+        assertEquals(0f, topspinAmount(offset = -10f, upSpread = 40f), delta)
+        assertEquals(0f, topspinAmount(offset = 50f, upSpread = 40f), delta)
+    }
+
+    @Test
+    fun topspinGrowsSmoothlyInBetween() {
+        val amount = topspinAmount(offset = -17f, upSpread = 40f)
+        assertTrue("amount was $amount", amount > 0.2f && amount < 0.8f)
+    }
+
+    @Test
+    fun aBatNeverGoesStraightFromBackhandToTopspin() {
+        var backhandHits = 0
+        for (seed in 0 until 50) {
+            val path = RallyYPath(seed, 40f, 60f)
+            for (boundary in 4..400) {
+                if (!isBackhandHeight(path.boundaryOffset(boundary - 2), 60f)) continue
+                backhandHits++
+                val next = path.boundaryOffset(boundary)
+                assertEquals("seed $seed, hit $boundary after a backhand", 0f, topspinAmount(next, 40f), 0f)
+            }
+        }
+        assertTrue("some hits were backhand", backhandHits > 100)
+    }
+
+    @Test
+    fun topspinStillHappensAfterForehandHits() {
+        val path = RallyYPath(2024, 40f, 60f)
+        val topspinHits = (2..2_000).count { topspinAmount(path.boundaryOffset(it), 40f) > 0f }
+        assertTrue("topspin hits: $topspinHits", topspinHits > 200)
+    }
+
+    @Test
+    fun noBatPlaysTopspinInAStraightRally() {
+        assertEquals(0f, topspinAmount(offset = -10f, upSpread = 0f), delta)
+    }
+
     // ----- How fast each leg is hit -----
 
     @Test

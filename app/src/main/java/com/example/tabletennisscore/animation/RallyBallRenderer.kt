@@ -229,7 +229,12 @@ class RallyBallRenderer(private val context: Context) : GLSurfaceView.Renderer {
         textureId = loadTexture(context, R.drawable.stigaperform40size128)
 
         GLES20.glEnable(GLES20.GL_BLEND)
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        // The view blends the result onto the screen as premultiplied alpha, so build the alpha channel
+        // the same way (ONE, not SRC_ALPHA): otherwise see-through parts, like the shadow, come out too faint.
+        GLES20.glBlendFuncSeparate(
+            GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+            GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+        )
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
