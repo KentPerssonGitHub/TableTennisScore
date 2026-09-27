@@ -3,20 +3,19 @@ import com.example.tabletennisscore.GameViewModel
 import com.example.tabletennisscore.R
 
 import android.graphics.Typeface
-import android.text.InputFilter
-import android.text.InputType
+import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.widget.ArrayAdapter
-import android.widget.AutoCompleteTextView
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.AppCompatTextView
+import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import java.util.Locale
@@ -42,18 +41,19 @@ fun AppCompatActivity.showSetupMatchDialog(viewModel: GameViewModel) {
     val form = SetupMatchForm(this, viewModel, state)
 
     val dialog = AlertDialog.Builder(this)
-        .setTitle(R.string.dialog_setup_match)
         .setView(ScrollView(this).apply { addView(form.buildContent()) })
         .setPositiveButton(R.string.dialog_done) { _, _ -> form.submit() }
         .setNegativeButton(R.string.dialog_cancel, null)
         .create()
     dialog.setOnShowListener { styleDialogButtons(dialog) }
     dialog.show()
+    // Use (nearly) the full width of the landscape screen so the two columns fit side by side.
+    dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.94f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
 }
 
 /**
- * The content of the "Setup match" dialog. [buildContent] stacks one card per section
- * (mode, singles names, doubles names, best-of, round) and [submit] applies the chosen values.
+ * The content of the "Setup match" dialog, laid out compactly in two columns: the players on the
+ * left, and match mode, best-of and round on the right. [submit] applies the chosen values.
  */
 private class SetupMatchForm(
     private val activity: AppCompatActivity,
@@ -61,7 +61,6 @@ private class SetupMatchForm(
     private val state: GameViewModel.GameState,
 ) {
     private val editableNameGroup = viewModel.getPlayerNameGroup().toMutableList()
-    private val nameInputs = mutableListOf<AutoCompleteTextView>()
 
     private var selectedMode = when (state.matchMode) {
         GameViewModel.MATCH_MODE_DOUBLES -> GameViewModel.MATCH_MODE_DOUBLES
@@ -70,71 +69,112 @@ private class SetupMatchForm(
     private var selectedBestOf = if (state.bestOfSets in BEST_OF_OPTIONS) state.bestOfSets else DEFAULT_BEST_OF
     private var selectedRound = state.matchRound.ifBlank { activity.getString(R.string.round_pool) }
 
-    private lateinit var singlesPlayer1Input: AutoCompleteTextView
-    private lateinit var singlesPlayer2Input: AutoCompleteTextView
-    private lateinit var team1AInput: AutoCompleteTextView
-    private lateinit var team1BInput: AutoCompleteTextView
-    private lateinit var team2AInput: AutoCompleteTextView
-    private lateinit var team2BInput: AutoCompleteTextView
+    private val singlesPlayer1 = NameBox(state.player1Name, R.string.dialog_player1_name)
+    private val singlesPlayer2 = NameBox(state.player2Name, R.string.dialog_player2_name)
+    private val team1A = NameBox(state.team1PlayerA, R.string.dialog_team1_player_a_hint)
+    private val team1B = NameBox(state.team1PlayerB, R.string.dialog_team1_player_b_hint)
+    private val team2A = NameBox(state.team2PlayerA, R.string.dialog_team2_player_a_hint)
+    private val team2B = NameBox(state.team2PlayerB, R.string.dialog_team2_player_b_hint)
+    private val tournament = NameBox(state.tournamentName, R.string.tournament_name_hint, NamePickerKind.TOURNAMENT)
 
     private fun dp(value: Int) = activity.dp(value)
 
     fun buildContent(): View {
-        val content = LinearLayout(activity).apply {
+        val singlesSection = singlesSection()
+        val doublesSection = doublesSection()
+        fun showSectionForSelectedMode() {
+            singlesSection.visibility = if (selectedMode == GameViewModel.MATCH_MODE_SINGLES) View.VISIBLE else View.GONE
+            doublesSection.visibility = if (selectedMode == GameViewModel.MATCH_MODE_DOUBLES) View.VISIBLE else View.GONE
+        }
+        showSectionForSelectedMode()
+
+        val playersColumn = column().apply {
+            addView(singlesSection)
+            addView(doublesSection)
+        }
+        val settingsColumn = column().apply {
+            addView(modeRow(onChanged = ::showSectionForSelectedMode))
+            addView(bestOfRow())
+            addView(roundSection())
+        }
+        (settingsColumn.layoutParams as LinearLayout.LayoutParams).marginStart = dp(20)
+
+        return LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(8), dp(10), 0)
+            setPadding(dp(20), dp(12), dp(20), 0)
+            addView(header())
+            addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(playersColumn)
+                addView(settingsColumn)
+            })
         }
-        content.addView(editNameGroupButton())
-
-        val singlesCard = singlesCard()
-        val doublesCard = doublesCard()
-        fun showCardForSelectedMode() {
-            singlesCard.visibility = if (selectedMode == GameViewModel.MATCH_MODE_SINGLES) View.VISIBLE else View.GONE
-            doublesCard.visibility = if (selectedMode == GameViewModel.MATCH_MODE_DOUBLES) View.VISIBLE else View.GONE
-        }
-        showCardForSelectedMode()
-
-        content.addView(modeCard(onChanged = ::showCardForSelectedMode))
-        content.addView(singlesCard)
-        content.addView(doublesCard)
-        content.addView(bestOfCard())
-        content.addView(roundCard())
-        return content
     }
 
     fun submit() {
+        viewModel.setTournamentName(tournament.name)
         viewModel.setMatchRound(selectedRound)
         viewModel.setupMatch(
-            player1Name = singlesPlayer1Input.text.toString(),
-            player2Name = singlesPlayer2Input.text.toString(),
+            player1Name = singlesPlayer1.name,
+            player2Name = singlesPlayer2.name,
             firstServer = state.server,
             bestOfSets = selectedBestOf,
             matchMode = selectedMode,
-            team1PlayerA = team1AInput.text.toString(),
-            team1PlayerB = team1BInput.text.toString(),
-            team2PlayerA = team2AInput.text.toString(),
-            team2PlayerB = team2BInput.text.toString(),
+            team1PlayerA = team1A.name,
+            team1PlayerB = team1B.name,
+            team2PlayerA = team2A.name,
+            team2PlayerB = team2B.name,
         )
     }
 
     // ----- Sections -----
 
-    private fun editNameGroupButton(): MaterialButton = activity.outlinedButton(
-        activity.getString(R.string.dialog_edit_player_names),
-        textSizeSp = 14f, heightDp = 34, horizontalPaddingDp = 18, verticalPaddingDp = 4,
-        cornerRadiusDp = 20, topMarginDp = 6,
-    ).apply {
-        setOnClickListener {
-            activity.showNameGroupEditorDialog(editableNameGroup) { updatedNames ->
-                editableNameGroup.clear()
-                editableNameGroup.addAll(updatedNames)
-                viewModel.setPlayerNameGroup(updatedNames)
-                nameInputs.forEach { bindNameGroup(it) }
-            }
-        }
+    /** Title on the left and the tournament name on the right, sharing one row to save height. */
+    private fun header() = LinearLayout(activity).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, 0, 0, dp(6))
+        addView(TextView(activity).apply {
+            text = activity.getString(R.string.dialog_setup_match)
+            setTextColor(ContextCompat.getColor(activity, R.color.score_text))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            setPadding(0, 0, dp(24), 0)
+        })
+        addView(sectionLabel(R.string.dialog_tournament).apply { setPadding(0, 0, dp(10), 0) })
+        addView(tournament.view, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     }
 
-    private fun modeCard(onChanged: () -> Unit): MaterialCardView {
+    private fun singlesSection() = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(sectionLabel(R.string.dialog_name_group))
+        addView(caption(R.string.player1_default))
+        addView(singlesPlayer1.view)
+        addView(caption(R.string.player2_default))
+        addView(singlesPlayer2.view)
+    }
+
+    /** Each team on one line (player A and B side by side), with the swap buttons below. */
+    private fun doublesSection() = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        // Half-width boxes: slightly smaller text so longer names fit without being cut off.
+        listOf(team1A, team1B, team2A, team2B).forEach { it.view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }
+        addView(sectionLabel(R.string.dialog_doubles_team_names))
+        addView(caption(R.string.dialog_team1))
+        addView(sideBySide(team1A.view, team1B.view))
+        addView(caption(R.string.dialog_team2))
+        addView(sideBySide(team2A.view, team2B.view))
+        addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(8), 0, 0)
+            addView(smallButton(R.string.dialog_swap_partners) { swapPartners() })
+            addView(smallButton(R.string.dialog_swap_teams) { swapTeams() }.apply {
+                (layoutParams as LinearLayout.LayoutParams).marginStart = dp(8)
+            })
+        })
+    }
+
+    private fun modeRow(onChanged: () -> Unit): View {
         val modes = listOf(
             GameViewModel.MATCH_MODE_SINGLES to activity.getString(R.string.dialog_mode_singles),
             GameViewModel.MATCH_MODE_DOUBLES to activity.getString(R.string.dialog_mode_doubles),
@@ -143,44 +183,16 @@ private class SetupMatchForm(
             selectedMode = it
             onChanged()
         }
-        return labelledChoiceCard(R.string.dialog_match_mode, chips, topMarginDp = 14)
+        return labelledRow(R.string.dialog_match_mode, chips)
     }
 
-    private fun singlesCard(): MaterialCardView {
-        singlesPlayer1Input = nameInput(R.string.dialog_player1_name, state.player1Name)
-        singlesPlayer2Input = nameInput(R.string.dialog_player2_name, state.player2Name)
-        val section = verticalSection(R.string.dialog_name_group).apply {
-            addView(singlesPlayer1Input)
-            addView(selectFromGroupButton(singlesPlayer1Input))
-            addView(singlesPlayer2Input)
-            addView(selectFromGroupButton(singlesPlayer2Input))
-        }
-        return activity.outlinedCard(topMarginDp = 10, content = section)
-    }
-
-    private fun doublesCard(): MaterialCardView {
-        team1AInput = nameInput(R.string.dialog_team1_player_a_hint, state.team1PlayerA)
-        team1BInput = nameInput(R.string.dialog_team1_player_b_hint, state.team1PlayerB)
-        team2AInput = nameInput(R.string.dialog_team2_player_a_hint, state.team2PlayerA)
-        team2BInput = nameInput(R.string.dialog_team2_player_b_hint, state.team2PlayerB)
-        val section = verticalSection(R.string.dialog_doubles_team_names).apply {
-            listOf(team1AInput, team1BInput, team2AInput, team2BInput).forEach { input ->
-                addView(input)
-                addView(selectFromGroupButton(input))
-            }
-            addView(swapPartnersButton())
-            addView(swapTeamsButton())
-        }
-        return activity.outlinedCard(topMarginDp = 10, content = section)
-    }
-
-    private fun bestOfCard(): MaterialCardView {
+    private fun bestOfRow(): View {
         val options = BEST_OF_OPTIONS.map { it to it.toString() }
         val chips = choiceChips(options, selectedBestOf) { selectedBestOf = it }
-        return labelledChoiceCard(R.string.dialog_best_of_sets, chips, topMarginDp = 14)
+        return labelledRow(R.string.dialog_best_of_sets, chips)
     }
 
-    private fun roundCard(): MaterialCardView {
+    private fun roundSection(): View {
         val rounds = listOf(
             R.string.round_pool,
             R.string.round_group,
@@ -190,85 +202,85 @@ private class SetupMatchForm(
             R.string.round_semi,
             R.string.round_final,
         ).map { activity.getString(it).let { name -> name to name } }
-        val chips = choiceChips(rounds, selectedRound, wideChips = true) { selectedRound = it }
-        chips.setPadding(0, 6, 0, 8)
-        val section = verticalSection(R.string.history_round_label).apply { addView(chips) }
-        return activity.outlinedCard(topMarginDp = 10, content = section)
+        val chips = choiceChips(rounds, selectedRound) { selectedRound = it }
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(sectionLabel(R.string.history_round_label))
+            addView(chips)
+        }
     }
 
     // ----- Building blocks -----
 
-    private fun swapPartnersButton(): MaterialButton = swapButton(R.string.dialog_swap_partners) {
-        val team1Partner = team1BInput.text?.toString().orEmpty()
-        val team2Partner = team2BInput.text?.toString().orEmpty()
-        team1BInput.setText(team2Partner)
-        team1BInput.setSelection(team1BInput.text.length)
-        team2BInput.setText(team1Partner)
-        team2BInput.setSelection(team2BInput.text.length)
+    private fun swapPartners() {
+        val team1Partner = team1B.name
+        team1B.name = team2B.name
+        team2B.name = team1Partner
     }
 
-    private fun swapTeamsButton(): MaterialButton = swapButton(R.string.dialog_swap_teams) {
-        val t1A = team1AInput.text?.toString().orEmpty()
-        val t1B = team1BInput.text?.toString().orEmpty()
-        val t2A = team2AInput.text?.toString().orEmpty()
-        val t2B = team2BInput.text?.toString().orEmpty()
-
-        team1AInput.setText(t2A)
-        team1BInput.setText(t2B)
-        team2AInput.setText(t1A)
-        team2BInput.setText(t1B)
-
-        team2BInput.setSelection(team2BInput.text.length)
+    private fun swapTeams() {
+        val (t1A, t1B) = team1A.name to team1B.name
+        team1A.name = team2A.name
+        team1B.name = team2B.name
+        team2A.name = t1A
+        team2B.name = t1B
     }
 
-    private fun swapButton(labelRes: Int, onClick: () -> Unit): MaterialButton = activity.outlinedButton(
+    private fun column() = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+
+    private fun sideBySide(left: View, right: View) = LinearLayout(activity).apply {
+        orientation = LinearLayout.HORIZONTAL
+        addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addView(right, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = dp(8)
+        })
+    }
+
+    private fun sectionLabel(textRes: Int) = TextView(activity).apply {
+        text = activity.getString(textRes)
+        setTypeface(typeface, Typeface.BOLD)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        setPadding(0, dp(6), 0, dp(2))
+    }
+
+    private fun caption(textRes: Int) = TextView(activity).apply {
+        text = activity.getString(textRes)
+        setTextColor(ContextCompat.getColor(activity, R.color.history_loser_text))
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        setPadding(0, dp(4), 0, dp(2))
+    }
+
+    /** A label on the left and a group of choice chips on the right, on one line. */
+    private fun labelledRow(labelRes: Int, chips: ChipGroup) = LinearLayout(activity).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(2), 0, dp(2))
+        addView(sectionLabel(labelRes).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        addView(chips)
+    }
+
+    private fun smallButton(labelRes: Int, onClick: () -> Unit): MaterialButton = activity.outlinedButton(
         activity.getString(labelRes),
-        textSizeSp = 13f, heightDp = 34, horizontalPaddingDp = 16, verticalPaddingDp = 4,
-        cornerRadiusDp = 20, topMarginDp = 8,
+        textSizeSp = 13f, heightDp = 32, horizontalPaddingDp = 14, verticalPaddingDp = 2,
+        cornerRadiusDp = 18, topMarginDp = 0,
     ).apply { setOnClickListener { onClick() } }
 
-    private fun verticalSection(titleRes: Int): LinearLayout = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(12), dp(12), dp(12), dp(12))
-        addView(
-            TextView(activity).apply {
-                text = activity.getString(titleRes)
-                setTypeface(typeface, Typeface.BOLD)
-                setPadding(0, 0, 0, dp(8))
-            },
-        )
-    }
-
-    /** A card with a label on the left and a group of choice chips on the right. */
-    private fun labelledChoiceCard(labelRes: Int, chips: ChipGroup, topMarginDp: Int): MaterialCardView {
-        val section = LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            addView(
-                AppCompatTextView(activity).apply {
-                    text = activity.getString(labelRes)
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    setPadding(0, 0, 12, 0)
-                },
-            )
-            addView(chips)
-        }
-        return activity.outlinedCard(topMarginDp, section)
-    }
-
-    /** A single-selection group of outlined chips; [onSelected] gets the value of the chosen chip. */
+    /** A single-selection group of compact outlined chips; [onSelected] gets the value of the chosen chip. */
     private fun <T : Any> choiceChips(
         options: List<Pair<T, String>>,
         initial: T,
-        wideChips: Boolean = false,
         onSelected: (T) -> Unit,
     ): ChipGroup {
         val group = ChipGroup(activity).apply {
             isSingleSelection = true
             isSelectionRequired = true
-            chipSpacingHorizontal = dp(8)
-            chipSpacingVertical = dp(8)
+            chipSpacingHorizontal = dp(6)
+            chipSpacingVertical = dp(2)
         }
         var selected = initial
         fun refreshOutlines() {
@@ -278,7 +290,7 @@ private class SetupMatchForm(
             }
         }
         options.forEach { (value, label) ->
-            group.addView(choiceChip(label, value == selected, wideChips).apply { tag = value })
+            group.addView(choiceChip(label, value == selected).apply { tag = value })
         }
         refreshOutlines()
         group.setOnCheckedStateChangeListener { _, checkedIds ->
@@ -291,7 +303,7 @@ private class SetupMatchForm(
         return group
     }
 
-    private fun choiceChip(label: String, selected: Boolean, wide: Boolean): Chip = Chip(activity).apply {
+    private fun choiceChip(label: String, selected: Boolean): Chip = Chip(activity).apply {
         id = View.generateViewId()
         text = label
         isCheckable = true
@@ -299,56 +311,73 @@ private class SetupMatchForm(
         isClickable = true
         isAllCaps = false
         isCheckedIconVisible = false
-        if (wide) {
-            // Material Chip does not support multiline text; keep a wider single-line pill.
-            minWidth = dp(84)
-            chipMinHeight = dp(36).toFloat()
-        } else {
-            minWidth = dp(52)
-            chipMinHeight = dp(34).toFloat()
-        }
+        setEnsureMinTouchTargetSize(false)
+        minWidth = dp(44)
+        chipMinHeight = dp(34).toFloat()
     }
 
-    // ----- Player-name inputs backed by the saved name group -----
+    // ----- Player and tournament names, picked from their saved lists -----
 
-    private fun nameInput(hintRes: Int, initial: String): AutoCompleteTextView =
-        AutoCompleteTextView(activity).apply {
-            hint = activity.getString(hintRes)
-            setText(initial)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-            filters = arrayOf(InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH), TitleCaseInputFilter())
-            maxLines = 1
-            bindNameGroup(this)
-            nameInputs.add(this)
-        }
-
-    private fun bindNameGroup(input: AutoCompleteTextView) {
-        if (editableNameGroup.isNotEmpty()) {
-            input.setAdapter(ArrayAdapter(activity, android.R.layout.simple_dropdown_item_1line, editableNameGroup))
-            input.threshold = 0
-            input.setOnClickListener { input.showDropDown() }
-            input.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) input.showDropDown()
+    /**
+     * A compact, tappable box showing a player's (or, for [kind] TOURNAMENT, the tournament's) name.
+     * Tapping it opens the name picker, where a name can be chosen, searched for, added or removed.
+     */
+    private inner class NameBox(
+        initial: String,
+        private val placeholderRes: Int,
+        private val kind: NamePickerKind = NamePickerKind.PLAYER,
+    ) {
+        var name: String = initial
+            set(value) {
+                field = value
+                render()
             }
-        } else {
-            input.setAdapter(null)
-            input.setOnClickListener(null)
-            input.setOnFocusChangeListener(null)
-        }
-    }
 
-    private fun selectFromGroupButton(targetInput: AutoCompleteTextView): MaterialButton =
-        activity.outlinedButton(activity.getString(R.string.dialog_select_from_group), bottomMarginDp = 8).apply {
+        val view: TextView = TextView(activity).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = dp(40)
+            setPadding(dp(12), dp(4), dp(8), dp(4))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(1), ContextCompat.getColor(activity, R.color.history_loser_text))
+            }
+            setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, R.drawable.ic_expand_more, 0)
+            compoundDrawableTintList = android.content.res.ColorStateList.valueOf(
+                ContextCompat.getColor(activity, R.color.player_name),
+            )
+            isClickable = true
+            isFocusable = true
             setOnClickListener {
-                activity.showPlayerNamePickerDialog(
-                    editableNameGroup, targetInput.text.toString(),
-                    onAdded = ::addToNameGroup,
-                ) { selected ->
-                    targetInput.setText(selected)
-                    targetInput.setSelection(targetInput.text.length)
+                when (kind) {
+                    NamePickerKind.PLAYER -> activity.showPlayerNamePickerDialog(
+                        editableNameGroup, name,
+                        onAdded = ::addToNameGroup,
+                        onRemoved = ::removeFromNameGroup,
+                    ) { picked -> name = picked }
+                    NamePickerKind.TOURNAMENT -> activity.showTournamentPickerDialog(
+                        viewModel.getTournamentNameGroup(), name,
+                        onAdded = viewModel::addTournamentNameToGroup,
+                        onRemoved = viewModel::removeTournamentNameFromGroup,
+                    ) { picked -> name = picked }
                 }
             }
         }
+
+        init {
+            render()
+        }
+
+        private fun render() {
+            val isEmpty = name.isBlank()
+            view.text = if (isEmpty) activity.getString(placeholderRes) else name
+            view.setTextColor(
+                ContextCompat.getColor(activity, if (isEmpty) R.color.history_loser_text else R.color.score_text),
+            )
+        }
+    }
 
     private fun addToNameGroup(name: String) {
         viewModel.addPlayerNameToGroup(name)
@@ -356,7 +385,11 @@ private class SetupMatchForm(
             editableNameGroup.add(name)
             editableNameGroup.sortBy { it.lowercase(Locale.ROOT) }
         }
-        nameInputs.forEach { bindNameGroup(it) }
+    }
+
+    private fun removeFromNameGroup(name: String) {
+        viewModel.removePlayerNameFromGroup(name)
+        editableNameGroup.removeAll { it.equals(name, ignoreCase = true) }
     }
 
     private companion object {

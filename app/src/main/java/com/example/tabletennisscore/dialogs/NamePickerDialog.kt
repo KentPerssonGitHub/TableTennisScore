@@ -2,6 +2,7 @@ package com.example.tabletennisscore.dialogs
 import com.example.tabletennisscore.GameViewModel
 import com.example.tabletennisscore.R
 import com.example.tabletennisscore.sanitizePlayerName
+import com.example.tabletennisscore.sanitizeTournamentName
 
 import android.content.res.ColorStateList
 import android.graphics.Typeface
@@ -9,6 +10,7 @@ import android.text.InputFilter
 import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -28,19 +30,70 @@ import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 
-/**
- * Lets the user pick a player name with a single tap.
- *
- * A field at the top both filters the list and adds new players: when the typed name is not in
- * [names], an "Add …" entry appears after the matches. An added name is passed to [onAdded] (so the
- * caller can save it to the group) and then picked. The [current] name is highlighted.
- */
+/** What a name picker lists, with the texts, length limit and cleanup that go with it. */
+enum class NamePickerKind(
+    val titleRes: Int,
+    val hintRes: Int,
+    val emptyRes: Int,
+    val removeTitleRes: Int,
+    val maxLength: Int,
+    /** Tournament names often contain a year, so their keyboard can switch to digits. */
+    val allowDigits: Boolean,
+    val sanitize: (String) -> String,
+) {
+    PLAYER(
+        titleRes = R.string.dialog_select_from_group,
+        hintRes = R.string.dialog_search_or_add_player_hint,
+        emptyRes = R.string.dialog_name_picker_empty,
+        removeTitleRes = R.string.confirm_remove_name_title,
+        maxLength = GameViewModel.MAX_PLAYER_NAME_LENGTH,
+        allowDigits = false,
+        sanitize = { sanitizePlayerName(it, "") },
+    ),
+    TOURNAMENT(
+        titleRes = R.string.dialog_select_tournament,
+        hintRes = R.string.dialog_search_or_add_tournament_hint,
+        emptyRes = R.string.dialog_tournament_picker_empty,
+        removeTitleRes = R.string.confirm_remove_tournament_title,
+        maxLength = GameViewModel.MAX_TOURNAMENT_NAME_LENGTH,
+        allowDigits = true,
+        sanitize = ::sanitizeTournamentName,
+    ),
+}
+
 fun AppCompatActivity.showPlayerNamePickerDialog(
-    names: List<String>,
+    groupNames: List<String>,
     current: String,
     onAdded: (String) -> Unit,
+    onRemoved: (String) -> Unit,
+    onPicked: (String) -> Unit,
+) = showNamePickerDialog(NamePickerKind.PLAYER, groupNames, current, onAdded, onRemoved, onPicked)
+
+fun AppCompatActivity.showTournamentPickerDialog(
+    tournamentNames: List<String>,
+    current: String,
+    onAdded: (String) -> Unit,
+    onRemoved: (String) -> Unit,
+    onPicked: (String) -> Unit,
+) = showNamePickerDialog(NamePickerKind.TOURNAMENT, tournamentNames, current, onAdded, onRemoved, onPicked)
+
+/**
+ * Lets the user pick a name (a player or a tournament, see [kind]) with a single tap.
+ *
+ * A field at the top both filters the list and adds new names: when the typed name is not in
+ * [groupNames], an "Add …" entry appears after the matches. An added name is passed to [onAdded] (so
+ * the caller can save it to the group) and then picked. The [current] name is highlighted.
+ * Long-pressing a name offers to remove it from the group; a removed name is passed to [onRemoved].
+ */
+fun AppCompatActivity.showNamePickerDialog(
+    kind: NamePickerKind,
+    groupNames: List<String>,
+    current: String,
+    onAdded: (String) -> Unit,
+    onRemoved: (String) -> Unit,
     onPicked: (String) -> Unit,
 ) {
+    val names = groupNames.toMutableList()
     val currentName = current.trim()
     val screenHeight = resources.displayMetrics.heightPixels
     // Cap on the list height; lifted while typing so the list can fill the room above the keyboard.
@@ -53,7 +106,7 @@ fun AppCompatActivity.showPlayerNamePickerDialog(
     }
 
     fun addAndPick(typed: String) {
-        val name = sanitizePlayerName(typed, "")
+        val name = kind.sanitize(typed)
         if (name.isBlank()) return
         val existing = names.firstOrNull { it.equals(name, ignoreCase = true) }
         if (existing == null) onAdded(name)
@@ -61,9 +114,9 @@ fun AppCompatActivity.showPlayerNamePickerDialog(
     }
 
     val searchInput = EditText(this).apply {
-        hint = getString(R.string.dialog_search_or_add_player_hint)
+        hint = getString(kind.hintRes)
         filters = arrayOf(
-            InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH),
+            InputFilter.LengthFilter(kind.maxLength),
             TitleCaseInputFilter()
         )
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
@@ -103,16 +156,25 @@ fun AppCompatActivity.showPlayerNamePickerDialog(
         chipSpacingVertical = dp(4)
     }
 
+    // Asks before removing a long-pressed name. Assigned below, since it rebuilds the list.
+    var confirmRemove: (String) -> Unit = {}
+
     fun rebuildList() {
         listContainer.removeAllViews()
         chips.removeAllViews()
         val query = searchInput.text.toString().trim()
         val matches = matchingNames(names, query)
-        val typedName = sanitizePlayerName(query, "")
+        val typedName = kind.sanitize(query)
         val canAdd = typedName.isNotBlank() && names.none { it.equals(typedName, ignoreCase = true) }
 
         matches.forEach { name ->
-            chips.addView(pickerChip(name, isCurrent = name.equals(currentName, ignoreCase = true)) { pick(name) })
+            chips.addView(
+                pickerChip(
+                    name,
+                    isCurrent = name.equals(currentName, ignoreCase = true),
+                    onLongClick = { confirmRemove(name) },
+                ) { pick(name) },
+            )
         }
         // Offer to add the typed name after the matches, since a match is usually what is wanted.
         if (canAdd) {
@@ -123,12 +185,27 @@ fun AppCompatActivity.showPlayerNamePickerDialog(
         listContainer.addView(chips)
         if (names.isEmpty() && query.isEmpty()) {
             listContainer.addView(TextView(this).apply {
-                text = getString(R.string.dialog_name_picker_empty)
-                setTextColor(ContextCompat.getColor(this@showPlayerNamePickerDialog, R.color.history_loser_text))
+                text = getString(kind.emptyRes)
+                setTextColor(ContextCompat.getColor(this@showNamePickerDialog, R.color.history_loser_text))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(dp(4), dp(16), dp(4), dp(16))
             })
         }
+    }
+
+    confirmRemove = { name ->
+        val confirmDialog = AlertDialog.Builder(this)
+            .setTitle(kind.removeTitleRes)
+            .setMessage(getString(R.string.confirm_remove_name_message, name))
+            .setPositiveButton(R.string.dialog_yes) { _, _ ->
+                onRemoved(name)
+                names.removeAll { it.equals(name, ignoreCase = true) }
+                rebuildList()
+            }
+            .setNegativeButton(R.string.dialog_no, null)
+            .create()
+        confirmDialog.setOnShowListener { styleDialogButtons(confirmDialog) }
+        confirmDialog.show()
     }
 
     searchInput.doAfterTextChanged {
@@ -171,7 +248,9 @@ fun AppCompatActivity.showPlayerNamePickerDialog(
             false
         }
     }
-    val keyboard = NameKeyboardView(this, searchInput, onDone = ::onDone, onHide = { setTyping(false) }).apply {
+    val keyboard = NameKeyboardView(
+        this, searchInput, allowDigits = kind.allowDigits, onDone = ::onDone, onHide = { setTyping(false) },
+    ).apply {
         visibility = View.GONE
     }
     rebuildList()
@@ -184,14 +263,14 @@ fun AppCompatActivity.showPlayerNamePickerDialog(
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, dp(10), 0, 0)
         addView(TextView(context).apply {
-            text = getString(R.string.dialog_select_from_group)
-            setTextColor(ContextCompat.getColor(this@showPlayerNamePickerDialog, R.color.score_text))
+            text = getString(kind.titleRes)
+            setTextColor(ContextCompat.getColor(this@showNamePickerDialog, R.color.score_text))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
         addView(TextView(context).apply {
             text = getString(R.string.dialog_cancel)
-            setTextColor(ContextCompat.getColor(this@showPlayerNamePickerDialog, R.color.player_name))
+            setTextColor(ContextCompat.getColor(this@showNamePickerDialog, R.color.player_name))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             gravity = Gravity.CENTER
             minimumHeight = dp(40)
@@ -271,6 +350,7 @@ private fun AppCompatActivity.pickerChip(
     label: String,
     isCurrent: Boolean = false,
     isAddChip: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Chip = Chip(this).apply {
     text = if (isAddChip) "＋ $label" else label
@@ -289,6 +369,13 @@ private fun AppCompatActivity.pickerChip(
     val font = ResourcesCompat.getFont(context, R.font.goldman)
     setTypeface(font, if (isCurrent || isAddChip) Typeface.BOLD else Typeface.NORMAL)
     setOnClickListener { onClick() }
+    if (onLongClick != null) {
+        setOnLongClickListener {
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            onLongClick()
+            true
+        }
+    }
 }
 
 /**

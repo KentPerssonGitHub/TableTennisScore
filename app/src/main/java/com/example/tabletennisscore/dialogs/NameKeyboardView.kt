@@ -20,33 +20,54 @@ import androidx.core.content.ContextCompat
  * A compact, letters-only keyboard for typing player names inside the app, so the name picker
  * does not need the (much taller) system keyboard. It types into [target]; capital letters come
  * from the target's TitleCaseInputFilter, so there is no shift key.
+ *
+ * With [allowDigits] (for tournament names, which often contain a year) a "123" key switches the
+ * top row between letters and digits.
  */
 @SuppressLint("ViewConstructor")
 class NameKeyboardView(
     context: Context,
     private val target: EditText,
+    allowDigits: Boolean = false,
     private val onDone: () -> Unit,
     private val onHide: () -> Unit,
 ) : LinearLayout(context) {
 
     private val keyHeight = context.dp(34)
     private val keyGap = context.dp(2)
+    private lateinit var topRow: LinearLayout
+    private var showingDigits = false
 
     init {
         orientation = VERTICAL
         setPadding(0, context.dp(4), 0, context.dp(2))
         LETTER_ROWS.forEachIndexed { index, row ->
-            addKeyRow {
+            val keyRow = addKeyRow {
                 row.forEach { letter -> addView(letterKey(letter)) }
                 if (index == LETTER_ROWS.lastIndex) {
                     addView(letterKey('-'))
                     addView(backspaceKey())
                 }
             }
+            if (index == 0) topRow = keyRow
         }
         addKeyRow {
             addView(hideKey())
-            addView(key(" ", weight = 6f, special = false).apply {
+            if (allowDigits) {
+                addView(actionKey(DIGITS_LABEL, weight = 1.5f, description = R.string.cd_keyboard_digits) {}.apply {
+                    setOnClickListener {
+                        tap()
+                        showingDigits = !showingDigits
+                        text = if (showingDigits) LETTERS_LABEL else DIGITS_LABEL
+                        contentDescription = context.getString(
+                            if (showingDigits) R.string.cd_keyboard_letters else R.string.cd_keyboard_digits,
+                        )
+                        topRow.removeAllViews()
+                        (if (showingDigits) DIGIT_ROW else LETTER_ROWS.first()).forEach { topRow.addView(letterKey(it)) }
+                    }
+                })
+            }
+            addView(key(" ", weight = if (allowDigits) 4.5f else 6f, special = false).apply {
                 contentDescription = context.getString(R.string.cd_keyboard_space)
                 setOnClickListener { tap(); type(' ') }
             })
@@ -54,11 +75,13 @@ class NameKeyboardView(
         }
     }
 
-    private fun addKeyRow(fill: LinearLayout.() -> Unit) {
-        addView(LinearLayout(context).apply {
+    private fun addKeyRow(fill: LinearLayout.() -> Unit): LinearLayout {
+        val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             fill()
-        }, LayoutParams(LayoutParams.MATCH_PARENT, keyHeight + keyGap * 2))
+        }
+        addView(row, LayoutParams(LayoutParams.MATCH_PARENT, keyHeight + keyGap * 2))
+        return row
     }
 
     private fun letterKey(letter: Char) = key(letter.uppercase(), weight = 1f, special = false).apply {
@@ -145,6 +168,9 @@ class NameKeyboardView(
 
     private companion object {
         val LETTER_ROWS = listOf("qwertyuiopå", "asdfghjklöä", "zxcvbnm")
+        const val DIGIT_ROW = "1234567890"
+        const val DIGITS_LABEL = "123"
+        const val LETTERS_LABEL = "ABC"
         const val KEY_COLOR = 0xFF4A4F5C.toInt()
         const val KEY_SPECIAL_COLOR = 0xFF33363F.toInt()
         const val KEY_RIPPLE_COLOR = 0x55FFFFFF

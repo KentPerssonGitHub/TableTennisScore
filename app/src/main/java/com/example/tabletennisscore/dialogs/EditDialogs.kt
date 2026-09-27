@@ -8,46 +8,22 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
-import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import java.util.Locale
 
+/** Long-pressing the tournament name opens the tournament picker, like the player names do. */
 fun AppCompatActivity.showEditTournamentNameDialog(viewModel: GameViewModel) {
     val currentName = viewModel.state.value?.tournamentName ?: ""
-    val editText = EditText(this).apply {
-        setText(currentName)
-        if (currentName.isNotBlank()) selectAll()
-        hint = getString(R.string.tournament_name_hint)
-        filters = arrayOf(
-            InputFilter.LengthFilter(GameViewModel.MAX_TOURNAMENT_NAME_LENGTH),
-            TitleCaseInputFilter()
-        )
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        imeOptions = EditorInfo.IME_ACTION_DONE
-        maxLines = 1
+    showTournamentPickerDialog(
+        viewModel.getTournamentNameGroup(), currentName,
+        onAdded = viewModel::addTournamentNameToGroup,
+        onRemoved = viewModel::removeTournamentNameFromGroup,
+    ) { selected ->
+        viewModel.setTournamentName(selected)
     }
-    val dialog = AlertDialog.Builder(this)
-        .setTitle(R.string.dialog_edit_tournament_name)
-        .setView(editText)
-        .setPositiveButton(R.string.dialog_ok) { _, _ ->
-            viewModel.setTournamentName(editText.text.toString())
-        }
-        .setNegativeButton(R.string.dialog_cancel, null)
-        .create()
-    dialog.setOnShowListener {
-        styleDialogButtons(dialog)
-        val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-        editText.setOnEditorActionListener { _, actionId, event ->
-            val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
-            if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
-                okButton.performClick(); true
-            } else false
-        }
-    }
-    dialog.show()
 }
 
 /**
@@ -64,6 +40,7 @@ fun AppCompatActivity.showEditNameDialog(player: Int, viewModel: GameViewModel) 
     showPlayerNamePickerDialog(
         viewModel.getPlayerNameGroup(), currentName,
         onAdded = { added -> viewModel.addPlayerNameToGroup(added) },
+        onRemoved = { removed -> viewModel.removePlayerNameFromGroup(removed) },
     ) { selected ->
         viewModel.setPlayerName(player, selected)
     }
@@ -119,6 +96,7 @@ fun AppCompatActivity.showEditDoublesTeamNameDialog(player: Int, state: GameView
                 showPlayerNamePickerDialog(
                     nameGroup, target.text.toString(),
                     onAdded = { added -> addToNameGroup(nameGroup, added, viewModel) },
+                    onRemoved = { removed -> removeFromNameGroup(nameGroup, removed, viewModel) },
                 ) { selected ->
                     target.setText(selected)
                     target.setSelection(target.text.length)
@@ -187,4 +165,10 @@ private fun addToNameGroup(nameGroup: MutableList<String>, name: String, viewMod
         nameGroup.add(name)
         nameGroup.sortBy { it.lowercase(Locale.ROOT) }
     }
+}
+
+/** Removes [name] from the stored name group and from the dialog's working copy [nameGroup]. */
+private fun removeFromNameGroup(nameGroup: MutableList<String>, name: String, viewModel: GameViewModel) {
+    viewModel.removePlayerNameFromGroup(name)
+    nameGroup.removeAll { it.equals(name, ignoreCase = true) }
 }

@@ -65,6 +65,7 @@ class HistoryActivity : AppCompatActivity() {
             showEditMatchDetailsDialog(
                 result, nameStore.load(emptyList()),
                 onNameAdded = { nameStore.add(it, emptyList()) },
+                onNameRemoved = { nameStore.remove(it, emptyList()) },
             ) { updated ->
                 nameStore.add(updated.player1Name, emptyList())
                 nameStore.add(updated.player2Name, emptyList())

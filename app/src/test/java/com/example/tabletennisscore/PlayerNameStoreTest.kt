@@ -50,6 +50,29 @@ class PlayerNameStoreTest {
     }
 
     @Test
+    fun tournamentNamesAreKeptSeparatelyFromPlayerNames() {
+        val tournaments = PlayerNameStore.tournamentNames(prefs)
+        store.replaceAll(listOf("Ann"))
+        tournaments.add("sm 2026", noDefaults)
+        assertEquals(listOf("Ann"), store.load(noDefaults))
+        assertEquals(listOf("Sm 2026"), tournaments.load(noDefaults))
+    }
+
+    @Test
+    fun removeDeletesTheNameIgnoringCase() {
+        store.replaceAll(listOf("Ann", "Bea", "Cid"))
+        store.remove("bea", noDefaults)
+        assertEquals(listOf("Ann", "Cid"), store.load(noDefaults))
+    }
+
+    @Test
+    fun removingTheLastNameLeavesAnEmptyListThatIsNotRefilledWithDefaults() {
+        store.replaceAll(listOf("Ann"))
+        store.remove("Ann", noDefaults)
+        assertEquals(emptyList<String>(), store.load(listOf("Bob")))
+    }
+
+    @Test
     fun addIgnoresNamesAlreadyPresentIgnoringCase() {
         store.replaceAll(listOf("Ann"))
         store.add("ANN", noDefaults)

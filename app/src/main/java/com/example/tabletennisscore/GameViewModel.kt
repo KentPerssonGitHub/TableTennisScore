@@ -75,6 +75,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(APP_PREFS_NAME, Context.MODE_PRIVATE)
     private val nameStore = PlayerNameStore(prefs)
+    private val tournamentStore = PlayerNameStore.tournamentNames(prefs)
 
     private val _state = MutableLiveData(
         GameState(
@@ -428,12 +429,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         nameStore.add(name, currentPlayerNames())
     }
 
+    fun removePlayerNameFromGroup(name: String) {
+        nameStore.remove(name, currentPlayerNames())
+    }
+
     private fun currentPlayerNames() = listOf(current.player1Name, current.player2Name)
+
+    fun getTournamentNameGroup(): List<String> = tournamentStore.load(currentTournamentNames())
+
+    fun addTournamentNameToGroup(name: String) {
+        tournamentStore.add(name, currentTournamentNames())
+    }
+
+    fun removeTournamentNameFromGroup(name: String) {
+        tournamentStore.remove(name, currentTournamentNames())
+    }
+
+    private fun currentTournamentNames() = listOf(current.tournamentName)
 
     fun setTournamentName(name: String) {
         val sanitized = sanitizeTournamentName(name)
         prefs.edit { putString(KEY_TOURNAMENT_NAME, sanitized) }
         _state.value = current.copy(tournamentName = sanitized)
+        tournamentStore.add(sanitized, currentTournamentNames())
     }
 
     fun setMatchRound(round: String) {

@@ -33,9 +33,10 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
     result: MatchResult,
     nameGroup: List<String>,
     onNameAdded: (String) -> Unit,
+    onNameRemoved: (String) -> Unit,
     onSave: (MatchResult) -> Unit,
 ) {
-    val form = EditMatchDetailsForm(this, result, nameGroup, onNameAdded)
+    val form = EditMatchDetailsForm(this, result, nameGroup, onNameAdded, onNameRemoved)
 
     val dialog = AlertDialog.Builder(this)
         .setTitle(R.string.history_match_details_title)
@@ -66,6 +67,7 @@ private class EditMatchDetailsForm(
     private val result: MatchResult,
     initialNameGroup: List<String>,
     private val onNameAdded: (String) -> Unit,
+    private val onNameRemoved: (String) -> Unit,
 ) {
     private val nameGroup = initialNameGroup.toMutableList()
     private var selectedRound = result.matchRound.ifBlank { activity.getString(R.string.round_pool) }
@@ -152,6 +154,7 @@ private class EditMatchDetailsForm(
                 activity.showPlayerNamePickerDialog(
                     nameGroup, target.text.toString(),
                     onAdded = ::addToNameGroup,
+                    onRemoved = ::removeFromNameGroup,
                 ) { selected ->
                     target.setText(selected)
                     target.setSelection(target.text.length)
@@ -166,6 +169,12 @@ private class EditMatchDetailsForm(
             nameGroup.add(name)
             nameGroup.sortBy { it.lowercase(Locale.ROOT) }
         }
+    }
+
+    /** Removes a name long-pressed in the picker, here and in the saved name group. */
+    private fun removeFromNameGroup(name: String) {
+        onNameRemoved(name)
+        nameGroup.removeAll { it.equals(name, ignoreCase = true) }
     }
 
     private fun sectionLabel(textRes: Int, topPadding: Int) = TextView(activity).apply {
