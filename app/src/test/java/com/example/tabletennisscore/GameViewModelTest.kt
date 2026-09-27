@@ -60,7 +60,11 @@ class GameViewModelTest {
 
     private fun GameViewModel.score(vararg players: Int) = players.forEach { addPoint(it) }
 
-    private fun GameViewModel.winSet(player: Int) = repeat(11) { addPoint(player) }
+    /** Wins a set 11-0, confirming the deciding-set side swap at 5 the way the app does. */
+    private fun GameViewModel.winSet(player: Int) = repeat(11) {
+        addPoint(player)
+        if (s.awaitingDecidingSetSwapConfirmation) confirmDecidingSetSideSwapDone()
+    }
 
     private fun advanceClock(seconds: Long) {
         ShadowSystemClock.advanceBy(Duration.ofSeconds(seconds))

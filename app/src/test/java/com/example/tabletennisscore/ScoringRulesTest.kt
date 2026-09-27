@@ -53,6 +53,7 @@ class ScoringRulesTest {
 
     @Test
     fun decidingSetIsWhenBothPlayersAreOneSetFromWinning() {
+        assertTrue(isDecidingSet(1, 1, bestOfSets = 3))
         assertTrue(isDecidingSet(2, 2, bestOfSets = 5))
         assertTrue(isDecidingSet(3, 3, bestOfSets = 7))
         assertFalse(isDecidingSet(1, 1, bestOfSets = 5))
@@ -60,9 +61,8 @@ class ScoringRulesTest {
     }
 
     @Test
-    fun decidingSetIsNeverReportedInShortMatches() {
+    fun decidingSetIsNeverReportedInABestOfOne() {
         assertFalse(isDecidingSet(0, 0, bestOfSets = 1))
-        assertFalse(isDecidingSet(1, 1, bestOfSets = 3))
     }
 
     // ----- Serving -----

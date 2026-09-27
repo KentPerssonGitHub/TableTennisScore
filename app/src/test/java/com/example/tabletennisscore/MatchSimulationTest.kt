@@ -139,7 +139,7 @@ class MatchSimulationTest {
     fun sidesSwapAfterEverySetExceptTheLastAndOnceInTheDecidingSet() = forEveryMatch { state, _, bestOfSets, _ ->
         val setsToWin = bestOfSets / 2 + 1
         val loserSets = if (state.matchWinner == 1) state.sets2 else state.sets1
-        val wasDecidingSet = bestOfSets >= 5 && loserSets == setsToWin - 1
+        val wasDecidingSet = bestOfSets >= 3 && loserSets == setsToWin - 1
 
         val expectedSwapNotices = if (wasDecidingSet) 1 else 0
         assertEquals(expectedSwapNotices, state.decidingSetSwapNoticeVersion)

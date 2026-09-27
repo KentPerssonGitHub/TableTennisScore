@@ -33,9 +33,9 @@ fun isMatchWon(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
     return sets1 >= setsToWin || sets2 >= setsToWin
 }
 
-/** The deciding set is only special (side swap at 5 points) in best-of-5 or longer matches. */
+/** The deciding set (side swap at 5 points) is the last possible set of a best-of-3 or longer match. */
 fun isDecidingSet(sets1: Int, sets2: Int, bestOfSets: Int): Boolean {
-    if (bestOfSets < 5) return false
+    if (bestOfSets < 3) return false
     val setsToWin = (bestOfSets / 2) + 1
     return sets1 == setsToWin - 1 && sets2 == setsToWin - 1
 }

@@ -237,8 +237,16 @@ class ScoringEngineTest {
     }
 
     @Test
-    fun noSwapAtFiveInABestOfThree() {
+    fun sidesSwapAtFiveInTheDecidingSetOfABestOfThree() {
         val change = point(running(bestOfSets = 3, sets1 = 1, sets2 = 1, score1 = 4, score2 = 3), 1)
+        assertTrue(change.state.sidesSwapped)
+        assertTrue(change.state.awaitingDecidingSetSwapConfirmation)
+        assertFalse(change.state.isMatchRunning)
+    }
+
+    @Test
+    fun noSwapAtFiveBeforeTheDecidingSetOfABestOfThree() {
+        val change = point(running(bestOfSets = 3, sets1 = 1, score1 = 4, score2 = 3), 1)
         assertFalse(change.state.sidesSwapped)
         assertTrue(change.state.isMatchRunning)
     }
