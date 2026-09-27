@@ -50,6 +50,10 @@ fun AppCompatActivity.showEditTournamentNameDialog(viewModel: GameViewModel) {
     dialog.show()
 }
 
+/**
+ * Long-pressing a player name opens the name picker directly (singles). In doubles each side is a
+ * team of two, so the team dialog opens instead, where each player can be picked.
+ */
 fun AppCompatActivity.showEditNameDialog(player: Int, viewModel: GameViewModel) {
     val state = viewModel.state.value ?: return
     if (state.matchMode == GameViewModel.MATCH_MODE_DOUBLES) {
@@ -57,73 +61,12 @@ fun AppCompatActivity.showEditNameDialog(player: Int, viewModel: GameViewModel) 
         return
     }
     val currentName = if (player == 1) state.player1Name else state.player2Name
-    val defaultName = if (player == 1) getString(R.string.player1_default) else getString(R.string.player2_default)
-    val isDefaultName = currentName == defaultName
-    val nameGroup = viewModel.getPlayerNameGroup().toMutableList()
-
-    val editText = AutoCompleteTextView(this).apply {
-        setText(if (isDefaultName) "" else currentName)
-        if (!isDefaultName) {
-            selectAll()
-        }
-        hint = getString(R.string.dialog_hint_name)
-        filters = arrayOf(
-            InputFilter.LengthFilter(GameViewModel.MAX_PLAYER_NAME_LENGTH),
-            TitleCaseInputFilter()
-        )
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        imeOptions = EditorInfo.IME_ACTION_DONE
-        maxLines = 1
-        threshold = 0
-        if (nameGroup.isNotEmpty()) {
-            setAdapter(ArrayAdapter(this@showEditNameDialog, android.R.layout.simple_dropdown_item_1line, nameGroup))
-            setOnClickListener { showDropDown() }
-        }
+    showPlayerNamePickerDialog(
+        viewModel.getPlayerNameGroup(), currentName,
+        onAdded = { added -> viewModel.addPlayerNameToGroup(added) },
+    ) { selected ->
+        viewModel.setPlayerName(player, selected)
     }
-
-    val selectFromGroupButton = outlinedButton(getString(R.string.dialog_select_from_group), topMarginDp = 6).apply {
-        setOnClickListener {
-            showPlayerNamePickerDialog(
-                nameGroup, editText.text.toString(),
-                onAdded = { added -> addToNameGroup(nameGroup, added, viewModel) },
-            ) { selected ->
-                editText.setText(selected)
-                editText.setSelection(editText.text.length)
-            }
-        }
-    }
-
-    val dialogContent = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(editText)
-        addView(selectFromGroupButton)
-    }
-
-    val dialog = AlertDialog.Builder(this)
-        .setTitle(getString(R.string.dialog_edit_name))
-        .setView(dialogContent)
-        .setPositiveButton(R.string.dialog_ok) { _, _ ->
-            val entered = editText.text.toString()
-            viewModel.setPlayerName(player, entered)
-            viewModel.addPlayerNameToGroup(entered)
-        }
-        .setNegativeButton(R.string.dialog_cancel, null)
-        .create()
-
-    dialog.setOnShowListener {
-        styleDialogButtons(dialog)
-        val okButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-        editText.setOnEditorActionListener { _, actionId, event ->
-            val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
-            if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
-                okButton.performClick()
-                true
-            } else {
-                false
-            }
-        }
-    }
-    dialog.show()
 }
 
 fun AppCompatActivity.showEditDoublesTeamNameDialog(player: Int, state: GameViewModel.GameState, viewModel: GameViewModel) {
