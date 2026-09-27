@@ -19,6 +19,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import java.util.Locale
 
 fun AppCompatActivity.confirmSetupMatch(viewModel: GameViewModel) {
     val state = viewModel.state.value ?: return
@@ -61,7 +62,6 @@ private class SetupMatchForm(
 ) {
     private val editableNameGroup = viewModel.getPlayerNameGroup().toMutableList()
     private val nameInputs = mutableListOf<AutoCompleteTextView>()
-    private val groupButtons = mutableListOf<MaterialButton>()
 
     private var selectedMode = when (state.matchMode) {
         GameViewModel.MATCH_MODE_DOUBLES -> GameViewModel.MATCH_MODE_DOUBLES
@@ -99,7 +99,6 @@ private class SetupMatchForm(
         content.addView(doublesCard)
         content.addView(bestOfCard())
         content.addView(roundCard())
-        refreshGroupButtons()
         return content
     }
 
@@ -131,7 +130,6 @@ private class SetupMatchForm(
                 editableNameGroup.addAll(updatedNames)
                 viewModel.setPlayerNameGroup(updatedNames)
                 nameInputs.forEach { bindNameGroup(it) }
-                refreshGroupButtons()
             }
         }
     }
@@ -342,20 +340,23 @@ private class SetupMatchForm(
     private fun selectFromGroupButton(targetInput: AutoCompleteTextView): MaterialButton =
         activity.outlinedButton(activity.getString(R.string.dialog_select_from_group), bottomMarginDp = 8).apply {
             setOnClickListener {
-                activity.showPlayerNamePickerDialog(editableNameGroup, targetInput.text.toString()) { selected ->
+                activity.showPlayerNamePickerDialog(
+                    editableNameGroup, targetInput.text.toString(),
+                    onAdded = ::addToNameGroup,
+                ) { selected ->
                     targetInput.setText(selected)
                     targetInput.setSelection(targetInput.text.length)
                 }
             }
-            groupButtons.add(this)
         }
 
-    private fun refreshGroupButtons() {
-        val hasNames = editableNameGroup.isNotEmpty()
-        groupButtons.forEach { button ->
-            button.isEnabled = hasNames
-            button.alpha = if (hasNames) 1f else 0.45f
+    private fun addToNameGroup(name: String) {
+        viewModel.addPlayerNameToGroup(name)
+        if (editableNameGroup.none { it.equals(name, ignoreCase = true) }) {
+            editableNameGroup.add(name)
+            editableNameGroup.sortBy { it.lowercase(Locale.ROOT) }
         }
+        nameInputs.forEach { bindNameGroup(it) }
     }
 
     private companion object {

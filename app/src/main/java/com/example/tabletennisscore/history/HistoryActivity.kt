@@ -62,7 +62,10 @@ class HistoryActivity : AppCompatActivity() {
             showTournamentActionsDialog(oldName, results)
         },
         onEditMatchDetails = { result ->
-            showEditMatchDetailsDialog(result, nameStore.load(emptyList())) { updated ->
+            showEditMatchDetailsDialog(
+                result, nameStore.load(emptyList()),
+                onNameAdded = { nameStore.add(it, emptyList()) },
+            ) { updated ->
                 nameStore.add(updated.player1Name, emptyList())
                 nameStore.add(updated.player2Name, emptyList())
                 lifecycleScope.launch { dao.update(updated) }

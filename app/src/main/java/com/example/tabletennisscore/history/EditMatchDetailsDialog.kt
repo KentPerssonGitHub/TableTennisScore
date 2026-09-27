@@ -26,14 +26,16 @@ import com.example.tabletennisscore.data.MatchResult
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import java.util.Locale
 
 /** Shows the match-details editor; [onSave] receives the edited copy once the input is valid. */
 fun AppCompatActivity.showEditMatchDetailsDialog(
     result: MatchResult,
     nameGroup: List<String>,
+    onNameAdded: (String) -> Unit,
     onSave: (MatchResult) -> Unit,
 ) {
-    val form = EditMatchDetailsForm(this, result, nameGroup)
+    val form = EditMatchDetailsForm(this, result, nameGroup, onNameAdded)
 
     val dialog = AlertDialog.Builder(this)
         .setTitle(R.string.history_match_details_title)
@@ -62,9 +64,10 @@ fun AppCompatActivity.showEditMatchDetailsDialog(
 private class EditMatchDetailsForm(
     private val activity: AppCompatActivity,
     private val result: MatchResult,
-    private val nameGroup: List<String>,
+    initialNameGroup: List<String>,
+    private val onNameAdded: (String) -> Unit,
 ) {
-    private val hasNameGroup = nameGroup.isNotEmpty()
+    private val nameGroup = initialNameGroup.toMutableList()
     private var selectedRound = result.matchRound.ifBlank { activity.getString(R.string.round_pool) }
 
     private lateinit var player1Edit: AutoCompleteTextView
@@ -77,7 +80,7 @@ private class EditMatchDetailsForm(
     fun buildContent(): View {
         player1Edit = nameEdit(R.string.history_edit_player1, result.player1Name, EditorInfo.IME_ACTION_NEXT)
         player2Edit = nameEdit(R.string.history_edit_player2, result.player2Name, EditorInfo.IME_ACTION_DONE)
-        if (hasNameGroup) {
+        if (nameGroup.isNotEmpty()) {
             val namesAdapter = ArrayAdapter(activity, android.R.layout.simple_dropdown_item_1line, nameGroup)
             listOf(player1Edit, player2Edit).forEach { edit ->
                 edit.setAdapter(namesAdapter)
@@ -145,15 +148,25 @@ private class EditMatchDetailsForm(
 
     private fun selectFromGroupButton(target: AutoCompleteTextView, bottomMarginDp: Int): MaterialButton =
         activity.outlinedButton(activity.getString(R.string.dialog_select_from_group), bottomMarginDp = bottomMarginDp).apply {
-            isEnabled = hasNameGroup
-            alpha = if (hasNameGroup) 1f else 0.45f
             setOnClickListener {
-                activity.showPlayerNamePickerDialog(nameGroup, target.text.toString()) { selected ->
+                activity.showPlayerNamePickerDialog(
+                    nameGroup, target.text.toString(),
+                    onAdded = ::addToNameGroup,
+                ) { selected ->
                     target.setText(selected)
                     target.setSelection(target.text.length)
                 }
             }
         }
+
+    /** Saves a name added from the picker and offers it in this dialog's pickers too. */
+    private fun addToNameGroup(name: String) {
+        onNameAdded(name)
+        if (nameGroup.none { it.equals(name, ignoreCase = true) }) {
+            nameGroup.add(name)
+            nameGroup.sortBy { it.lowercase(Locale.ROOT) }
+        }
+    }
 
     private fun sectionLabel(textRes: Int, topPadding: Int) = TextView(activity).apply {
         text = activity.getString(textRes)

@@ -16,30 +16,6 @@ fun AppCompatActivity.styleDialogButtons(dialog: AlertDialog) {
         ?.setTextColor(ContextCompat.getColor(this, R.color.player_name))
 }
 
-fun AppCompatActivity.showPlayerNamePickerDialog(
-    names: List<String>,
-    current: String,
-    onPicked: (String) -> Unit,
-) {
-    if (names.isEmpty()) return
-    val checkedIndex = names.indexOfFirst { it.equals(current.trim(), ignoreCase = true) }
-    var selectedIndex = checkedIndex
-    val dialog = AlertDialog.Builder(this)
-        .setTitle(R.string.dialog_select_from_group)
-        .setSingleChoiceItems(names.toTypedArray(), checkedIndex) { _, which ->
-            selectedIndex = which
-        }
-        .setPositiveButton(R.string.dialog_ok) { _, _ ->
-            if (selectedIndex in names.indices) {
-                onPicked(names[selectedIndex])
-            }
-        }
-        .setNegativeButton(R.string.dialog_cancel, null)
-        .create()
-    dialog.setOnShowListener { styleDialogButtons(dialog) }
-    dialog.show()
-}
-
 /**
  * Input filter that ensures words are capitalized.
  * Useful when the keyboard ignores standard capitalization flags.

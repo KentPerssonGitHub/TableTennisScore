@@ -13,6 +13,7 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
+import java.util.Locale
 
 fun AppCompatActivity.showEditTournamentNameDialog(viewModel: GameViewModel) {
     val currentName = viewModel.state.value?.tournamentName ?: ""
@@ -58,7 +59,7 @@ fun AppCompatActivity.showEditNameDialog(player: Int, viewModel: GameViewModel) 
     val currentName = if (player == 1) state.player1Name else state.player2Name
     val defaultName = if (player == 1) getString(R.string.player1_default) else getString(R.string.player2_default)
     val isDefaultName = currentName == defaultName
-    val nameGroup = viewModel.getPlayerNameGroup()
+    val nameGroup = viewModel.getPlayerNameGroup().toMutableList()
 
     val editText = AutoCompleteTextView(this).apply {
         setText(if (isDefaultName) "" else currentName)
@@ -81,10 +82,11 @@ fun AppCompatActivity.showEditNameDialog(player: Int, viewModel: GameViewModel) 
     }
 
     val selectFromGroupButton = outlinedButton(getString(R.string.dialog_select_from_group), topMarginDp = 6).apply {
-        isEnabled = nameGroup.isNotEmpty()
-        alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
         setOnClickListener {
-            showPlayerNamePickerDialog(nameGroup, editText.text.toString()) { selected ->
+            showPlayerNamePickerDialog(
+                nameGroup, editText.text.toString(),
+                onAdded = { added -> addToNameGroup(nameGroup, added, viewModel) },
+            ) { selected ->
                 editText.setText(selected)
                 editText.setSelection(editText.text.length)
             }
@@ -125,7 +127,7 @@ fun AppCompatActivity.showEditNameDialog(player: Int, viewModel: GameViewModel) 
 }
 
 fun AppCompatActivity.showEditDoublesTeamNameDialog(player: Int, state: GameViewModel.GameState, viewModel: GameViewModel) {
-    val nameGroup = viewModel.getPlayerNameGroup()
+    val nameGroup = viewModel.getPlayerNameGroup().toMutableList()
 
     val playerAValue: String
     val playerBValue: String
@@ -170,10 +172,11 @@ fun AppCompatActivity.showEditDoublesTeamNameDialog(player: Int, state: GameView
 
     fun createSelectButton(target: AutoCompleteTextView): MaterialButton {
         return outlinedButton(getString(R.string.dialog_select_from_group), bottomMarginDp = 8).apply {
-            isEnabled = nameGroup.isNotEmpty()
-            alpha = if (nameGroup.isNotEmpty()) 1f else 0.45f
             setOnClickListener {
-                showPlayerNamePickerDialog(nameGroup, target.text.toString()) { selected ->
+                showPlayerNamePickerDialog(
+                    nameGroup, target.text.toString(),
+                    onAdded = { added -> addToNameGroup(nameGroup, added, viewModel) },
+                ) { selected ->
                     target.setText(selected)
                     target.setSelection(target.text.length)
                 }
@@ -232,4 +235,13 @@ fun AppCompatActivity.showEditDoublesTeamNameDialog(player: Int, state: GameView
         }
     }
     dialog.show()
+}
+
+/** Saves [name] to the stored name group and to the dialog's working copy [nameGroup], keeping it sorted. */
+private fun addToNameGroup(nameGroup: MutableList<String>, name: String, viewModel: GameViewModel) {
+    viewModel.addPlayerNameToGroup(name)
+    if (nameGroup.none { it.equals(name, ignoreCase = true) }) {
+        nameGroup.add(name)
+        nameGroup.sortBy { it.lowercase(Locale.ROOT) }
+    }
 }
