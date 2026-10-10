@@ -18,6 +18,8 @@ import com.example.tabletennisscore.R
 import com.example.tabletennisscore.data.MatchResult
 import com.example.tabletennisscore.dialogs.dp
 import com.example.tabletennisscore.firstServerOfSet
+import com.example.tabletennisscore.nextServer
+import com.example.tabletennisscore.otherPlayer
 
 private const val TEAM_SEPARATOR = " / "
 
@@ -361,9 +363,10 @@ internal class PointDetailsRenderer(
         pointsStr.forEachIndexed { index, char ->
             val isLast = index == pointsStr.length - 1
             val pointWinner = if (char == '1') 1 else 2
+            val wonOnServe = pointWinner == nextServer(s1, s2, s1 + s2, setFirstServer)
             if (pointWinner == 1) s1++ else s2++
 
-            scores.addView(scoreColumn(s1, s2, pointWinner, matchWinner, isLast))
+            scores.addView(scoreColumn(s1, s2, pointWinner, wonOnServe, matchWinner, isLast))
 
             // Add separator at 10-10
             if (!deuceReached && s1 == 10 && s2 == 10) {
@@ -408,24 +411,34 @@ internal class PointDetailsRenderer(
         }
     }
 
-    /** One column of the progression: both players' score after a point, match winner on top. */
-    private fun scoreColumn(s1: Int, s2: Int, pointWinner: Int, matchWinner: Int, isLast: Boolean) =
-        LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { marginEnd = if (isLast) 24.dp() else 12.dp() }
+    /**
+     * One column of the progression: both players' score after a point, match winner on top.
+     * [wonOnServe] is whether the point's winner was also serving it.
+     */
+    private fun scoreColumn(
+        s1: Int,
+        s2: Int,
+        pointWinner: Int,
+        wonOnServe: Boolean,
+        matchWinner: Int,
+        isLast: Boolean,
+    ) = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { marginEnd = if (isLast) 24.dp() else 12.dp() }
 
-            if (matchWinner == 1) {
-                addView(createScoreTextView(s1.toString(), pointWinner == 1, isLast))
-                addView(createScoreTextView(s2.toString(), pointWinner == 2, isLast))
-            } else {
-                addView(createScoreTextView(s2.toString(), pointWinner == 2, isLast))
-                addView(createScoreTextView(s1.toString(), pointWinner == 1, isLast))
-            }
-        }
+        fun score(player: Int) = createScoreTextView(
+            text = (if (player == 1) s1 else s2).toString(),
+            isPointWinner = pointWinner == player,
+            wonOnServe = wonOnServe,
+            isLastPoint = isLast,
+        )
+        addView(score(matchWinner))
+        addView(score(otherPlayer(matchWinner)))
+    }
 
     private fun deuceSeparator() = TextView(activity).apply {
         text = "|"
@@ -538,14 +551,16 @@ internal class PointDetailsRenderer(
         setPadding(4.dp(), 0, 0, 0)
     }
 
-    private fun createScoreTextView(text: String, isPointWinner: Boolean, isLastPoint: Boolean) =
+    /** The point winner's score is highlighted, in its own colour when the point was [wonOnServe]. */
+    private fun createScoreTextView(text: String, isPointWinner: Boolean, wonOnServe: Boolean, isLastPoint: Boolean) =
         TextView(activity).apply {
             this.text = text
+            val winnerColor = if (wonOnServe) R.color.point_won_on_serve else R.color.sets_text
             if (isLastPoint) {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
                 setTypeface(null, Typeface.BOLD)
                 if (isPointWinner) {
-                    setTextColor(color(R.color.sets_text))
+                    setTextColor(color(winnerColor))
                 } else {
                     setTextColor(color(R.color.score_text))
                     alpha = 0.9f
@@ -553,7 +568,7 @@ internal class PointDetailsRenderer(
             } else {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 if (isPointWinner) {
-                    setTextColor(color(R.color.sets_text))
+                    setTextColor(color(winnerColor))
                     setTypeface(null, Typeface.BOLD)
                 } else {
                     setTextColor(color(R.color.history_loser_text))
