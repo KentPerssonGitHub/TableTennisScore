@@ -46,6 +46,9 @@ private const val SHADOW_DROP_RATIO = 0.4f
 private const val SHADOW_SOLID_RATIO = 0.55f
 private const val SHADOW_BITMAP_SIZE = 64
 
+/** How long a leg of the rally takes at the base pace of a live match. */
+const val DEFAULT_LEG_DURATION_MILLIS = 1800L
+
 /**
  * Works out where the rally ball is at a given moment and draws it (and its shadow on the table) onto a
  * [Canvas]. Drawn by [RallyBallView] on the main thread, in the same frame as the bats and with the same
@@ -105,11 +108,21 @@ class RallyBallRenderer(context: Context) {
     var shadowTableLeft: Float? = null
     var shadowTableRight: Float? = null
 
+    /**
+     * A finite rally (replay): its legs play normally up to the mistake, which is then drawn instead of the
+     * next leg, and after it the ball is gone. Null (the default) is the endless rally of a live match.
+     */
+    var script: RallyScript? = null
+
     private var startTime = 0L
     private var pathSeed = Random.nextInt()
     // TEST ONLY: slow motion. Everything (ball, spin, bats) follows this leg duration. Set back to 1 when done.
     private val slowMotionFactor = 1L
-    private val duration = 1800L * slowMotionFactor
+
+    /** How long a leg takes at the base pace. Everything (ball, spin, bats) follows it; lower is faster. */
+    var legDurationMillis = DEFAULT_LEG_DURATION_MILLIS * slowMotionFactor
+    private val duration: Long
+        get() = legDurationMillis
     val fullCycleDurationMillis: Long
         get() = duration * 2
 
@@ -192,6 +205,12 @@ class RallyBallRenderer(context: Context) {
             val totalElapsed = frameTimeMillis - startTime
             val path = yPath
             val legPositionNow = path.legPositionAt(totalElapsed, duration)
+            script?.let { rally ->
+                if (legPositionNow >= rally.mistakeLeg) {
+                    drawMistake(canvas, rally, path, legPositionNow)
+                    return
+                }
+            }
             val legIndex = floor(legPositionNow).toLong()
             val pLocal = legPositionNow - legIndex
             val forwardLeg = (legIndex % 2L) == 0L
@@ -230,18 +249,49 @@ class RallyBallRenderer(context: Context) {
         }
 
         drawShadow(canvas, currentX, currentY, tableY)
+        drawBall(canvas, currentX, currentY, rotation)
+    }
 
+    /**
+     * The losing stroke of a scripted rally: the ball's flight from the hitter's end (see [mistakeFlight]),
+     * fading out as it leaves; nothing once the mistake is over.
+     */
+    private fun drawMistake(canvas: Canvas, rally: RallyScript, path: RallyYPath, legPosition: Float) {
+        val progress = (legPosition - rally.mistakeLeg) / RallyScript.MISTAKE_LEGS
+        if (progress >= 1f) return
+        val flight = mistakeFlight(rally.mistake, progress)
+        if (flight.alpha <= 0f) return
+
+        // Even legs go from leftX to rightX; the hitter of this leg is at its start.
+        val forwardLeg = rally.mistakeLeg % 2 == 0
+        val fromX = if (forwardLeg) leftX else rightX
+        val toX = if (forwardLeg) rightX else leftX
+        val x = fromX + (toX - fromX) * flight.travel
+        val offset = path.boundaryOffset(rally.mistakeLeg)
+        val tableY = baseY + offset
+        val y = tableY - arcHeight * peakAmplitudeAtEdges * flight.height
+
+        // A missed ball keeps travelling and spinning the way it came; the other mistakes were hit back.
+        val travelDirection = if (forwardLeg) 1f else -1f
+        val spinDirection = if (rally.mistake == MistakeType.WHIFF) travelDirection else -travelDirection
+        val rotation = progress * 360f * 2f * spinDirection
+        drawShadow(canvas, x, y, tableY, flight.alpha)
+        drawBall(canvas, x, y, rotation, flight.alpha)
+    }
+
+    private fun drawBall(canvas: Canvas, x: Float, y: Float, rotation: Float, alpha: Float = 1f) {
         // The ball image, scaled to the ball's size and spun around its center. Flipped upside down, the
         // way the earlier OpenGL version always showed it.
         ballMatrix.reset()
         ballMatrix.postScale(ballWidth / ballBitmap.width, -ballHeight / ballBitmap.height)
         ballMatrix.postTranslate(-ballWidth / 2f, ballHeight / 2f)
         ballMatrix.postRotate(rotation)
-        ballMatrix.postTranslate(currentX + ballWidth / 2f, currentY + ballHeight / 2f)
+        ballMatrix.postTranslate(x + ballWidth / 2f, y + ballHeight / 2f)
+        ballPaint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
         canvas.drawBitmap(ballBitmap, ballMatrix, ballPaint)
     }
 
-    private fun drawShadow(canvas: Canvas, ballX: Float, ballY: Float, tableY: Float) {
+    private fun drawShadow(canvas: Canvas, ballX: Float, ballY: Float, tableY: Float, ballAlpha: Float = 1f) {
         val tableLeft = shadowTableLeft ?: return
         val tableRight = shadowTableRight ?: return
         val peakHeight = arcHeight * peakAmplitudeAtEdges
@@ -261,7 +311,8 @@ class RallyBallRenderer(context: Context) {
             (centerX - tableLeft + halfWidth) / shadowWidth,
             (tableRight - centerX + halfWidth) / shadowWidth,
         ).coerceIn(0f, 1f)
-        val alpha = (SHADOW_ALPHA_AT_TABLE + (SHADOW_ALPHA_AT_PEAK - SHADOW_ALPHA_AT_TABLE) * height) * onTable
+        val alpha = (SHADOW_ALPHA_AT_TABLE + (SHADOW_ALPHA_AT_PEAK - SHADOW_ALPHA_AT_TABLE) * height) *
+            onTable * ballAlpha
         if (alpha <= 0f) return
 
         shadowPaint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)

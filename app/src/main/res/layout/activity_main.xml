@@ -275,6 +275,17 @@
             android:text="@string/btn_pause_match"
             android:visibility="gone" />
 
+        <!-- Only shown in a match replay; ends it. -->
+        <TextView
+            android:id="@+id/btnStopReplay"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_center_menu_secondary_button"
+            android:elevation="1dp"
+            android:text="@string/btn_stop_replay"
+            android:visibility="gone" />
+
         <!-- Only shown while not playing; switches which player is shown on which side. -->
         <TextView
             android:id="@+id/btnSwapSides"
@@ -457,6 +468,27 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Only shown in a match replay: a big pulsating "R" in the corner. Above the summary panel (24dp). -->
+    <TextView
+        android:id="@+id/tvReplayBadge"
+        style="@style/Widget.TableTennisScore.TextView"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="14dp"
+        android:background="@drawable/bg_replay_badge"
+        android:contentDescription="@string/replay_label"
+        android:elevation="26dp"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="@string/replay_badge"
+        android:textColor="@color/score_text"
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <com.example.tabletennisscore.animation.RallyBallView
         android:id="@+id/glRallyBall"

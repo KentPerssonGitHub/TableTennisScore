@@ -87,6 +87,10 @@
     <string name="notice_swap_sides_now">Deciding set: switch sides now.\n\nSkip if you are just training and stay at your ends.</string>
     <string name="notice_done">Done</string>
     <string name="notice_skip_swap">Skip</string>
+    <string name="btn_history_play">▶ Play</string>
+    <string name="btn_stop_replay">■ Stop Replay</string>
+    <string name="replay_label">Replay</string>
+    <string name="replay_badge">R</string>
     <string name="splash_tap_to_continue">Tap to continue</string>
     <string name="cd_startup_image">Startup image</string>
     <string name="tournament_name_default">Tournament Name</string>

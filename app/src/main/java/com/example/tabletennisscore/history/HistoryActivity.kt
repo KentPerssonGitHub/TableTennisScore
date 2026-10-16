@@ -58,6 +58,12 @@ class HistoryActivity : AppCompatActivity() {
             }
             startActivity(intent)
         },
+        onPlay = { result ->
+            val intent = Intent(this, ReplayActivity::class.java).apply {
+                putExtra(ReplayActivity.EXTRA_MATCH_ID, result.id)
+            }
+            startActivity(intent)
+        },
         onTournamentActions = { oldName, results ->
             showTournamentActionsDialog(oldName, results)
         },

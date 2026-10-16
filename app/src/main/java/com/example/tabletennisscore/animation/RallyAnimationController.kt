@@ -10,6 +10,7 @@ import com.example.tabletennisscore.databinding.ActivityMainBinding
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val SERVE_BOUNCE_TRAVEL_OVERFLOW = 0.05f
@@ -86,6 +87,8 @@ private const val TOPSPIN_WINDUP_LEAN_ANGLE = 45f
  */
 private const val TOPSPIN_BACKSWING_WINDOW = -0.12f
 private const val TOPSPIN_PAUSE_WINDOW = 0.04f
+/** In a replayed miss (see [MistakeType.WHIFF]) the bat swings this much late, in cycle units, and misses. */
+private const val WHIFF_LATE_SWING = 0.06f
 
 /**
  * Drives the match-mode serve/rally animation: the ball ([RallyBallView]) and the two
@@ -99,6 +102,22 @@ class RallyAnimationController(
     private var rallyStartsFromLeft = true
     private var lastRallyScoreKey: List<Int>? = null
     private var rallyBatAnimator: ValueAnimator? = null
+
+    /**
+     * A finite rally (replay) instead of the endless one of a live match: no bat hits after the mistake, and
+     * [onRallyFinished] is called once when it is over. Set it before the score change that starts the rally.
+     */
+    var script: RallyScript?
+        get() = binding.glRallyBall.renderer.script
+        set(value) {
+            // The finished flag is only cleared when the new rally actually restarts (see startIfNeeded);
+            // until then the old rally's frames must not report this one as finished.
+            binding.glRallyBall.renderer.script = value
+        }
+
+    /** Called once, on the main thread, when a scripted rally (see [script]) has fully played out. */
+    var onRallyFinished: (() -> Unit)? = null
+    private var rallyFinishedReported = false
 
     /**
      * Where a bat's head meets the ball on the middle line, the bat's swing angle at that moment, and
@@ -181,6 +200,7 @@ class RallyAnimationController(
             val contactY = baseY - (arcHeight * SERVE_RALLY_PEAK_AMPLITUDE_AT_EDGES)
             updateBatPositions(travelStartX, travelEndX, contactY, ballWidth, ballHeight)
 
+            if (shouldRestartCycle) rallyFinishedReported = false
             binding.glRallyBall.renderer.apply {
                 if (shouldRestartCycle) {
                     resetAnimationPhase()
@@ -348,7 +368,14 @@ class RallyAnimationController(
         // than from a fixed-duration animator, keeps a bat's swing in step with its own hit even so.
         val renderer = binding.glRallyBall.renderer
         val path = renderer.yPath
-        val legPosition = renderer.legPosition
+        val script = renderer.script
+        val rawLegPosition = renderer.legPosition
+        if (script != null && !rallyFinishedReported && rawLegPosition >= script.rallyEnd) {
+            rallyFinishedReported = true
+            onRallyFinished?.invoke()
+        }
+        // After a scripted mistake there is no next hit: the bats stay where they are, at rest.
+        val legPosition = if (script != null) minOf(rawLegPosition, script.mistakeLeg + 0.5f) else rawLegPosition
         val cycleProgress = (legPosition % 2f) / 2f
 
         val leftStrikePoint = if (rallyStartsFromLeft) 0f else 0.5f
@@ -362,8 +389,12 @@ class RallyAnimationController(
         val upSpread = renderer.returnYUpSpread
         val leftTopspin = topspinAmount(path.strikeOffset(strikesOnEvenBoundaries = rallyStartsFromLeft, legPosition), upSpread)
         val rightTopspin = topspinAmount(path.strikeOffset(strikesOnEvenBoundaries = !rallyStartsFromLeft, legPosition), upSpread)
-        val leftPose = swingPose(cycleProgress, leftStrikePoint, leftTopspin, binding.ivBatLeft.width.toFloat())
-        val rightPose = swingPose(cycleProgress, rightStrikePoint, rightTopspin, binding.ivBatRight.width.toFloat())
+        val leftPose = scriptedSwingPose(
+            script, legPosition, cycleProgress, leftStrikePoint, leftTopspin, binding.ivBatLeft.width.toFloat(),
+        )
+        val rightPose = scriptedSwingPose(
+            script, legPosition, cycleProgress, rightStrikePoint, rightTopspin, binding.ivBatRight.width.toFloat(),
+        )
 
         // Far down the table a bat plays the ball backhand: it turns over (handle up) and shows its other rubber.
         val downSpread = renderer.returnYDownSpread
@@ -377,6 +408,34 @@ class RallyAnimationController(
             (-BAT_IDLE_SWING_ANGLE + (BAT_SWING_ANGLE * rightPose.swing) + rightPose.lean)
         leftContact?.let { placeBat(binding.ivBatLeft, leftFlipper, it, leftOffset, leftPose) }
         rightContact?.let { placeBat(binding.ivBatRight, rightFlipper, it, rightOffset, rightPose) }
+    }
+
+    /**
+     * [swingPose], but in a scripted rally a bat never swings at a ball that won't come (any hit after the
+     * mistake), and a missed ball is swung at a little late, so the ball visibly gets past the bat.
+     */
+    private fun scriptedSwingPose(
+        script: RallyScript?,
+        legPosition: Float,
+        progress: Float,
+        strikePoint: Float,
+        topspin: Float,
+        batWidth: Float,
+    ): SwingPose {
+        if (script == null) return swingPose(progress, strikePoint, topspin, batWidth)
+        val boundary = strikeBoundary(legPosition, strikePoint)
+        if (boundary > script.mistakeLeg) return SwingPose(0f)
+        val late = if (boundary == script.mistakeLeg && script.mistake == MistakeType.WHIFF) WHIFF_LATE_SWING else 0f
+        return swingPose(progress - late, strikePoint, topspin, batWidth)
+    }
+
+    /**
+     * The boundary (hit) a bat's stroke belongs to at [legPosition]: the one [swingPose] times its swing
+     * around. [strikePoint] is where in the 2-leg cycle the bat hits, 0 (even boundaries) or 0.5 (odd ones).
+     */
+    private fun strikeBoundary(legPosition: Float, strikePoint: Float): Int {
+        val distance = legPosition / 2f - strikePoint - BAT_SWING_DELAY
+        return ((floor(distance + 0.5f) + strikePoint) * 2f).roundToInt()
     }
 
     /**

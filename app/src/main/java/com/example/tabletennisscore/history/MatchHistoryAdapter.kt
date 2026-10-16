@@ -32,6 +32,7 @@ sealed class HistoryListItem {
 class MatchHistoryAdapter(
     private val onDelete: (MatchResult) -> Unit,
     private val onDetails: (MatchResult) -> Unit,
+    private val onPlay: (MatchResult) -> Unit,
     private val onTournamentActions: (String, List<MatchResult>) -> Unit,
     private val onEditMatchDetails: (MatchResult) -> Unit,
     private val onToggleDataValidity: (MatchResult) -> Unit,
@@ -65,7 +66,7 @@ class MatchHistoryAdapter(
         if (holder is HeaderViewHolder && item is HistoryListItem.Header) {
             holder.bind(item, onTournamentActions, onToggleExpand)
         } else if (holder is MatchViewHolder && item is HistoryListItem.Match) {
-            holder.bind(item.result, onDelete, onDetails, onEditMatchDetails, onToggleDataValidity)
+            holder.bind(item.result, onDelete, onDetails, onPlay, onEditMatchDetails, onToggleDataValidity)
         }
     }
 
@@ -101,6 +102,7 @@ class MatchHistoryAdapter(
         private val tvTournament: TextView = view.findViewById(R.id.tvItemTournament)
         private val btnDelete: View = view.findViewById(R.id.btnItemDelete)
         private val btnDetails: View = view.findViewById(R.id.btnItemDetails)
+        private val btnPlay: View = view.findViewById(R.id.btnItemPlay)
 
         private val dateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm", Locale.getDefault())
         private val density = view.resources.displayMetrics.density
@@ -109,6 +111,7 @@ class MatchHistoryAdapter(
             result: MatchResult, 
             onDelete: (MatchResult) -> Unit, 
             onDetails: (MatchResult) -> Unit,
+            onPlay: (MatchResult) -> Unit,
             onEditMatchDetails: (MatchResult) -> Unit,
             onToggleDataValidity: (MatchResult) -> Unit,
         ) {
@@ -145,6 +148,8 @@ class MatchHistoryAdapter(
             
             btnDelete.setOnClickListener { onDelete(result) }
             btnDetails.setOnClickListener { onDetails(result) }
+            btnPlay.visibility = if (canReplay(result)) View.VISIBLE else View.GONE
+            btnPlay.setOnClickListener { onPlay(result) }
             
             itemView.setOnLongClickListener {
                 onEditMatchDetails(result)
@@ -371,16 +376,6 @@ class MatchHistoryAdapter(
                 ).apply {
                     marginEnd = 16.dp()
                 }
-            }
-        }
-
-        private fun parseSetResults(setResultsJson: String): List<Pair<Int, Int>> {
-            if (setResultsJson.isBlank()) return emptyList()
-            return setResultsJson.split(",").mapNotNull { token ->
-                val parts = token.trim().split("-")
-                val first = parts.getOrNull(0)?.trim()?.toIntOrNull()
-                val second = parts.getOrNull(1)?.trim()?.toIntOrNull()
-                if (first != null && second != null) first to second else null
             }
         }
 

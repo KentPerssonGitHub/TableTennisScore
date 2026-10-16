@@ -13,10 +13,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import com.example.tabletennisscore.databinding.ActivityMainBinding
 
+/**
+ * Shows the end-of-match summary over the scoreboard once [state] has a winner, with [elapsedMs] as the
+ * played time; tapping it hides it again and calls [onClose]. Hidden while the match has no winner.
+ */
 fun AppCompatActivity.updateMatchSummaryPanel(
-binding: ActivityMainBinding,
-viewModel: GameViewModel,
-state: GameViewModel.GameState,
+    binding: ActivityMainBinding,
+    state: GameViewModel.GameState,
+    elapsedMs: Long,
+    onClose: () -> Unit,
 ) {
     if (state.matchWinner == null) {
         binding.matchSummaryPanel.visibility = View.GONE
@@ -37,7 +42,7 @@ state: GameViewModel.GameState,
     renderMatchSummaryScoreTable(binding, state)
     binding.tvMatchSummaryTime.text = getString(
         R.string.match_summary_time,
-        formatClockDuration(viewModel.getElapsedPlayedMs()),
+        formatClockDuration(elapsedMs),
     )
     binding.matchSummaryPanel.setBackgroundColor("#CC220000".toColorInt())
 
@@ -62,8 +67,7 @@ state: GameViewModel.GameState,
         binding.tvMatchTimer.visibility = View.VISIBLE
         // Show the "pillars" (controls) again
         binding.centerControlsRow.visibility = View.VISIBLE
-        // Reset match so scores are 0-0 and "Start Match" is shown for next game
-        viewModel.resetMatch()
+        onClose()
     }
 
     // Dismiss when tapping the summary panel itself
