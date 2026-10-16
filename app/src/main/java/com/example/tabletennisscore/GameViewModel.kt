@@ -177,17 +177,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = current.copy(sidesSwapped = !current.sidesSwapped)
     }
 
-    fun confirmDecidingSetSideSwapDone() {
+    fun confirmDecidingSetSideSwapDone() = finishDecidingSetSwapPrompt(swapSkipped = false)
+
+    /** The players stay at their ends (e.g. training): undo the on-screen side swap and carry on. */
+    fun skipDecidingSetSideSwap() = finishDecidingSetSwapPrompt(swapSkipped = true)
+
+    private fun finishDecidingSetSwapPrompt(swapSkipped: Boolean) {
         if (!current.awaitingDecidingSetSwapConfirmation) return
         val shouldResume = current.resumeAfterDecidingSetSwapConfirmation && current.matchWinner == null
         if (shouldResume) {
             runningSinceMs = SystemClock.elapsedRealtime()
         }
         _state.value = current.copy(
+            sidesSwapped = if (swapSkipped) !current.sidesSwapped else current.sidesSwapped,
             awaitingDecidingSetSwapConfirmation = false,
             resumeAfterDecidingSetSwapConfirmation = false,
             isMatchRunning = shouldResume,
         )
+        saveMatchInProgress()
     }
 
     fun addPoint(player: Int) {

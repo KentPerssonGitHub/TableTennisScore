@@ -459,6 +459,49 @@ class GameViewModelTest {
     }
 
     @Test
+    fun skippingTheDecidingSetSwapKeepsTheSidesAndResumes() {
+        val vm = newViewModel()
+        vm.toDecidingSetFourTwo()
+        vm.score(1)
+        assertTrue(vm.s.awaitingDecidingSetSwapConfirmation)
+
+        vm.skipDecidingSetSideSwap()
+        assertFalse("players stayed at their ends", vm.s.sidesSwapped)
+        assertTrue(vm.s.isMatchRunning)
+        assertFalse(vm.s.awaitingDecidingSetSwapConfirmation)
+        assertTrue("no second prompt in this set", vm.s.decidingSetFiveSwapDone)
+        vm.score(2)
+        assertEquals(3, vm.s.score2)
+    }
+
+    @Test
+    fun undoingTheFifthPointAndScoringItAgainAsksForTheSwapAgain() {
+        val vm = newViewModel()
+        vm.toDecidingSetFourTwo()
+        vm.score(1)
+        vm.confirmDecidingSetSideSwapDone()
+        vm.undo()
+        assertEquals(4, vm.s.score1)
+        assertFalse(vm.s.sidesSwapped)
+        assertTrue(vm.s.isMatchRunning)
+
+        vm.score(1)
+        assertTrue(vm.s.awaitingDecidingSetSwapConfirmation)
+        vm.skipDecidingSetSideSwap()
+        assertTrue(vm.s.isMatchRunning)
+        assertFalse(vm.s.sidesSwapped)
+    }
+
+    @Test
+    fun skippingWithoutAPendingSwapDoesNothing() {
+        val vm = newViewModel()
+        vm.startMatch()
+        vm.skipDecidingSetSideSwap()
+        assertTrue(vm.s.isMatchRunning)
+        assertFalse(vm.s.sidesSwapped)
+    }
+
+    @Test
     fun confirmingWithoutAPendingSwapDoesNothing() {
         val vm = newViewModel()
         vm.startMatch()

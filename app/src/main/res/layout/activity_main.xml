@@ -275,6 +275,18 @@
             android:text="@string/btn_pause_match"
             android:visibility="gone" />
 
+        <!-- Only shown while not playing; switches which player is shown on which side. -->
+        <TextView
+            android:id="@+id/btnSwapSides"
+            style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_center_menu_secondary_button"
+            android:elevation="1dp"
+            android:contentDescription="@string/cd_swap_sides"
+            android:text="@string/btn_swap_sides"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/btnSetupMatch"
             style="@style/Widget.TableTennisScore.CenterMenuPrimaryAction"
@@ -445,22 +457,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/ivSwapSides"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginTop="-16dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/cd_swap_sides"
-        android:elevation="12dp"
-        android:padding="2dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_swap_horiz"
-        android:tint="@color/player_name"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="@id/divider"
-        app:layout_constraintStart_toStartOf="@id/divider"
-        app:layout_constraintTop_toBottomOf="@id/setBoardsRow" />
 
     <com.example.tabletennisscore.animation.RallyBallView
         android:id="@+id/glRallyBall"

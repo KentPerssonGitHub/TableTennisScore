@@ -25,7 +25,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.tabletennisscore.databinding.ActivityMainBinding
-import com.google.android.material.snackbar.Snackbar
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -39,8 +38,7 @@ class MainActivity : AppCompatActivity() {
     private var isDraggingServeBall = false
     private var lastScoreTouchX = 0f
     private var lastScoreTouchY = 0f
-    private var lastShownDecidingSwapNoticeVersion = 0
-    private var decidingSwapSnackbar: Snackbar? = null
+    private var decidingSwapDialog: AlertDialog? = null
     private var previousIsMatchRunning = false
     private val rallyAnimation by lazy { RallyAnimationController(binding) { viewModel.state.value } }
     private val prefs by lazy { getSharedPreferences(APP_PREFS_NAME, MODE_PRIVATE) }
@@ -148,7 +146,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvSet1.setOnLongClickListener(setLongClick)
         binding.tvSet2.setOnLongClickListener(setLongClick)
 
-        // Name long-press – long-press name to edit to avoid accidental taps near swap icon
+        // Name long-press – long-press name to edit, so a normal tap can still score
         // A normal tap on the name keeps the usual "add a point" behaviour for that side.
         binding.tvPlayer1Name.setOnClickListener {
             viewModel.addPoint(if (viewModel.state.value?.sidesSwapped == true) 2 else 1)
@@ -183,10 +181,7 @@ class MainActivity : AppCompatActivity() {
             showEditTournamentNameDialog(viewModel)
             true
         }
-        binding.ivSwapSides.setOnLongClickListener {
-            viewModel.swapSides()
-            true
-        }
+        binding.btnSwapSides.setOnClickListener { viewModel.swapSides() }
         setupServeBallDrag()
     }
 
@@ -393,24 +388,29 @@ class MainActivity : AppCompatActivity() {
         binding.tvTournamentName.alpha = if (tName.isBlank()) 0.35f else 0.70f
     }
 
+    /**
+     * Shows the deciding-set swap prompt for as long as the match waits for it. Driven by the waiting flag
+     * itself, so the prompt always comes back (after undo and re-scoring, rotation or a resumed match) and
+     * the screen can never be left with all controls hidden.
+     */
     private fun handleDecidingSetSwapNotice(state: GameViewModel.GameState) {
-        if (state.decidingSetSwapNoticeVersion > lastShownDecidingSwapNoticeVersion) {
-            lastShownDecidingSwapNoticeVersion = state.decidingSetSwapNoticeVersion
-            decidingSwapSnackbar?.dismiss()
-            decidingSwapSnackbar = Snackbar.make(
-                binding.rootLayout,
-                R.string.notice_swap_sides_now,
-                Snackbar.LENGTH_INDEFINITE,
-            ).setAction(R.string.notice_done) {
-                viewModel.confirmDecidingSetSideSwapDone()
-            }
-            decidingSwapSnackbar?.show()
-        }
-
         if (!state.awaitingDecidingSetSwapConfirmation) {
-            decidingSwapSnackbar?.dismiss()
-            decidingSwapSnackbar = null
+            decidingSwapDialog?.dismiss()
+            decidingSwapDialog = null
+            return
         }
+        if (decidingSwapDialog?.isShowing == true) return
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_swap_sides_title)
+            .setMessage(R.string.notice_swap_sides_now)
+            .setPositiveButton(R.string.notice_done) { _, _ -> viewModel.confirmDecidingSetSideSwapDone() }
+            .setNegativeButton(R.string.notice_skip_swap) { _, _ -> viewModel.skipDecidingSetSideSwap() }
+            .setCancelable(false)
+            .create()
+        dialog.setOnShowListener { styleDialogButtons(dialog) }
+        decidingSwapDialog = dialog
+        dialog.show()
     }
 
     /** Serve indicator follows the player, not the side. */
@@ -457,7 +457,7 @@ class MainActivity : AppCompatActivity() {
             binding.btnToggleInGame.visibility = View.GONE
 
             binding.centerControlsRow.visibility = View.VISIBLE
-            binding.ivSwapSides.visibility = View.GONE
+            binding.btnSwapSides.visibility = View.GONE
             rallyAnimation.startIfNeeded()
             startMatchTimerTickerIfNeeded()
         } else {
@@ -473,7 +473,7 @@ class MainActivity : AppCompatActivity() {
             binding.btnToggleInGame.visibility = if (showControls && isPausedMidMatch) View.VISIBLE else View.GONE
 
             binding.centerControlsRow.visibility = if (showControls) View.VISIBLE else View.GONE
-            binding.ivSwapSides.visibility = if (!isMatchFinished && !isAwaitingSwapConfirm) View.VISIBLE else View.GONE
+            binding.btnSwapSides.visibility = if (showControls && !isMatchFinished) View.VISIBLE else View.GONE
             rallyAnimation.stop()
             stopMatchTimerTicker()
         }
@@ -493,8 +493,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        decidingSwapSnackbar?.dismiss()
-        decidingSwapSnackbar = null
+        decidingSwapDialog?.dismiss()
+        decidingSwapDialog = null
         rallyAnimation.stop()
         stopMatchTimerTicker()
         super.onDestroy()

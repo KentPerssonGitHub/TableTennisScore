@@ -32,12 +32,12 @@
     <style name="Widget.TableTennisScore.CenterMenuAction" parent="@style/Widget.TableTennisScore.TextView">
         <item name="android:textSize">15.3sp</item>
         <item name="android:gravity">center</item>
-        <item name="android:paddingVertical">10dp</item>
+        <item name="android:paddingVertical">7dp</item>
         <item name="android:paddingHorizontal">14dp</item>
         <item name="android:layout_marginStart">8dp</item>
         <item name="android:layout_marginEnd">8dp</item>
-        <item name="android:layout_marginTop">4dp</item>
-        <item name="android:layout_marginBottom">4dp</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:layout_marginBottom">3dp</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
     </style>
